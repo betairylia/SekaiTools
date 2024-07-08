@@ -325,6 +325,7 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                 if (!_contentMatcher.Finished || !_dialogMatcher.Finished ||
                     !_bannerMatcher.Finished || !_markerMatcher.Finished)
                 {
+                    ViewModel.IsFinished = true;
                     snackService.Show("错误", "运行结束", ControlAppearance.Danger,
                         new SymbolIcon(SymbolRegular.DocumentDismiss24), new TimeSpan(0, 0, 3));
                 }
@@ -349,6 +350,29 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
         if (_matcherCreator == null) throw new NullReferenceException();
         var frameCount = _videoCapture.Get(CapProp.FrameCount);
         var markerIndexInDialog = MarkerIndexOfDialog();
+        
+        // Debug usage
+        int _debugEarlyTerminate = -1;
+        if (Int32.TryParse(Environment.GetEnvironmentVariable("DebugFrameID"), out int debugFrameID))
+        {
+            string targetString = Environment.GetEnvironmentVariable("DebugTargetString");
+            string speakerString = Environment.GetEnvironmentVariable("DebugTargetSpeaker");
+            if (targetString != null)
+            {
+                _debugEarlyTerminate = _dialogMatcher.DebugSetFinishedUntilContains(targetString, speakerString);
+                
+                if (Int32.TryParse(Environment.GetEnvironmentVariable("DebugEarlyTermination"), out int ETlength))
+                {
+                    _debugEarlyTerminate += ETlength;
+                    _dialogMatcher.DebugSetFinishedAfter(_debugEarlyTerminate);
+                }
+            }
+            
+            _videoCapture.Set(CapProp.PosFrames, debugFrameID);
+        }
+        
+        // temporal workaround
+        _dialogMatcher._____Patch();
 
         var avgDuration = 0d;
         var frameIndex = 0;
@@ -387,6 +411,10 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                     matchBannerNow = !r;
                     if (_dialogMatcher.Set[dialogIndex].Finished)
                         LinePanel_AddDialogLine(_dialogMatcher.Set[dialogIndex]);
+                }
+                else if (_debugEarlyTerminate > 0)
+                {
+                    break;
                 }
 
                 if (!_bannerMatcher.Finished&&matchBannerNow  )

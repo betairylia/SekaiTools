@@ -13,7 +13,7 @@ public class Dialog(
     public readonly string CharacterOriginal = characterOriginal;
     public string CharacterTranslated = "";
     public readonly bool CloseWindow = closeWindow;
-    public readonly bool Shake = shake;
+    public bool Shake = shake; // TODO: FIXME: Used by _____Patch; Changeback to readonly !!!
 
     public void SetTranslation(string character, string body)
     {

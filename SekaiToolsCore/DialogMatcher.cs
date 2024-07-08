@@ -33,7 +33,7 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
             {
                 X = (videoInfo.Resolution.Width - dialogAreaSize.Width) / 2,
                 Y = (videoInfo.Resolution.Height - dialogAreaSize.Height - ntt.Height) / 1,
-                Height = (int)(ntt.Height * 1.4),
+                Height = (int)(ntt.Height * 1.75),
                 Width = (int)(ntt.Width + ntt.Height * 0.8),
             };
 
@@ -56,7 +56,7 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
                 }
                 : new Size
                 {
-                    Height = (int)(0.133 * videoInfo.Resolution.Width),
+                    Height = (int)(0.139 * videoInfo.Resolution.Width),
                     Width = (int)(0.781 * videoInfo.Resolution.Width)
                 };
         }
@@ -122,7 +122,7 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
         }
 
 
-        bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.8)
+        bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.74)
         {
             var offset = templateManager.DbTemplateMaxSize().Height;
             Rectangle dialogStartPosition = new(
@@ -150,13 +150,47 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
 
     public readonly List<DialogFrameSet> Set =
         storyData.Dialogs().Select(d => new DialogFrameSet(d, videoInfo.Fps)).ToList();
-
+    
     private static int LastNotProcessedIndex(IReadOnlyList<DialogFrameSet> set)
     {
         for (var i = 0; i < set.Count; i++)
             if (!set[i].Finished)
                 return i;
         return -1;
+    }
+
+    public int DebugSetFinishedUntilContains(string targetString, string speaker = null) =>
+        DebugSetFinishedUntilContains(Set, targetString, speaker);
+    
+    private static int DebugSetFinishedUntilContains(IList<DialogFrameSet> set, string targetString, string speaker)
+    {
+        for (var i = 0; i < set.Count; i++)
+        {
+            if (set[i].Data.BodyOriginal.Contains(targetString) && 
+                (speaker == null || set[i].Data.CharacterOriginal.Contains(speaker)))
+                return i;
+            set[i].Finished = true;
+        }
+        
+        return -1;
+    }
+
+    public void DebugSetFinishedAfter(int index)
+        => DebugSetFinishedAfter(Set, index);
+    
+    private static void DebugSetFinishedAfter(IList<DialogFrameSet> set, int index)
+    {
+        for (var i = index; i < set.Count; i++)
+        {
+            set[i].Finished = true;
+        }
+    }
+
+    public void _____Patch()
+    {
+        Set[69].Data.Shake = true;
+        Set[70].Data.Shake = true;
+        Set[71].Data.Shake = true;
     }
 
     public int LastNotProcessedIndex() => LastNotProcessedIndex(Set);
