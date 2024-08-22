@@ -156,7 +156,6 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
         var charaFontsize = (int)(fontsize * 0.9);
         var charaOutlineSize = (int)Math.Ceiling(charaFontsize / 15.0);
 
-
         var blackColor = new AlphaColor(0, 255, 255, 255);
         var outlineColor = new AlphaColor(50, 73, 71, 102);
         var result = new List<Style>
