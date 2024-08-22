@@ -14,7 +14,7 @@ public class Dialog(
     public readonly int CharacterId = characterId;
     public readonly string CharacterOriginal = characterOriginal;
     public readonly bool CloseWindow = closeWindow;
-    public readonly bool Shake = shake; 
+    public readonly bool Shake = shake;
     public string CharacterTranslated = "";
 
     public string FinalCharacter => CharacterTranslated.Length > 0 && CharacterTranslated != CharacterOriginal

@@ -339,7 +339,10 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                 if (!_contentMatcher.Finished || !_dialogMatcher.Finished ||
                     !_bannerMatcher.Finished || !_markerMatcher.Finished)
                 {
-                    ViewModel.IsFinished = true;
+                    if (Environment.GetEnvironmentVariable("DebugForceOutput") == "True")
+                    {
+                        ViewModel.IsFinished = true;
+                    }
                     snackService.Show("错误", "运行结束", ControlAppearance.Danger,
                         new SymbolIcon(SymbolRegular.DocumentDismiss24), new TimeSpan(0, 0, 3));
                 }

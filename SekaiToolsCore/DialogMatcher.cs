@@ -49,9 +49,6 @@ public class DialogMatcher(
             var rect = new Rectangle
             {
                 X = (videoInfo.Resolution.Width - dialogAreaSize.Width) / 2,
-                // Y = (videoInfo.Resolution.Height - dialogAreaSize.Height - ntt.Height) / 1,
-                // Height = (int)(ntt.Height * 1.75),
-                // Width = (int)(ntt.Width + ntt.Height * 0.8),
                 Y = (videoInfo.Resolution.Height - dialogAreaSize.Height - (int)(ntt.Height * 1.1)) / 1,
                 Height = (int)(ntt.Height * 1.8),
                 Width = (int)(ntt.Width + ntt.Height * 0.8)
@@ -73,7 +70,7 @@ public class DialogMatcher(
                 }
                 : new Size
                 {
-                    Height = (int)(0.139 * videoInfo.Resolution.Width),
+                    Height = (int)(0.133 * videoInfo.Resolution.Width),
                     Width = (int)(0.781 * videoInfo.Resolution.Width)
                 };
         }
@@ -141,8 +138,6 @@ public class DialogMatcher(
                 return MatchStatus.DialogNotMatched;
         }
 
-
-        // bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.74)
         bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.65)
         {
             var offset = templateManager.DbTemplateMaxSize().Height;
@@ -172,7 +167,7 @@ public class DialogMatcher(
             return [new GaMat(mat1), new GaMat(mat2), new GaMat(mat3)];
         }
     }
-    
+
     private static int LastNotProcessedIndex(IReadOnlyList<DialogFrameSet> set)
     {
         for (var i = 0; i < set.Count; i++)
