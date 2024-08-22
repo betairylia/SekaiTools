@@ -3,15 +3,22 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SekaiDataFetch.Data;
 
-
 namespace SekaiDataFetch;
 
 public class Fetcher
 {
     public SourceList Source { get; } = new();
     private Proxy UserProxy { get; set; } = Proxy.None;
-    public void SetSource(SourceList.SourceType sourceType) => Source.SetSource(sourceType);
-    public void SetProxy(Proxy proxy) => UserProxy = proxy;
+
+    public void SetSource(SourceList.SourceType sourceType)
+    {
+        Source.SetSource(sourceType);
+    }
+
+    public void SetProxy(Proxy proxy)
+    {
+        UserProxy = proxy;
+    }
 
     private HttpMessageHandler GetHttpHandler()
     {
@@ -29,14 +36,6 @@ public class Fetcher
             },
             _ => throw new ArgumentOutOfRangeException()
         };
-    }
-
-
-    private record PjSekaiResponse
-    {
-        public int Total { get; set; }
-        public int Limit { get; set; }
-        public JObject[] Data { get; set; } = [];
     }
 
     private static T? JsonDeserialize<T>(string json) where T : class
@@ -63,7 +62,7 @@ public class Fetcher
                 if (jObjects == null) throw new JsonSerializationException();
                 return jObjects;
             case SourceList.SourceType.SiteAi:
-                var data = JsonDeserialize<PjSekaiResponse>(responseContent);
+                var data = JsonConvert.DeserializeObject<PjSekaiResponse>(responseContent);
                 if (data == null) throw new JsonSerializationException();
                 return data.Total > data.Limit
                     ? await FetchSource(url.Insert(url.IndexOf('?') + 1, $"$limit={data.Total}&"))
@@ -144,5 +143,13 @@ public class Fetcher
     {
         var json = await FetchSource(Source.SpecialStories);
         return json == null ? [] : json.Select(SpecialStory.FromJson).ToList();
+    }
+
+
+    private record PjSekaiResponse
+    {
+        public int Total { get; } = 0;
+        public int Limit { get; } = 0;
+        public JObject[] Data { get; } = [];
     }
 }

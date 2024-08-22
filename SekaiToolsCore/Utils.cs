@@ -2,24 +2,62 @@ using System.Drawing;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
+using Newtonsoft.Json.Linq;
 
 namespace SekaiToolsCore;
 
 public static partial class Utils
 {
+    public static TU Get<TU>(this JObject json, string key, TU defaultValue)
+    {
+        if (json.TryGetValue(key, out var value)) return value.ToObject<TU>() ?? defaultValue;
+        return defaultValue;
+    }
+
+    public static int GetInt(this JObject json, string key, int defaultValue = 0)
+    {
+        return json.Get(key, defaultValue);
+    }
+
+    public static string GetString(this JObject json, string key, string defaultValue = "")
+    {
+        return json.Get(key, defaultValue);
+    }
+
+    public static double GetDouble(this JObject json, string key, double defaultValue = 0.0)
+    {
+        return json.Get(key, defaultValue);
+    }
+
     public static int LineCount(this string str)
-        => str.Split('\n').Select(value => value.Length > 0 ? 1 : 0).Sum();
+    {
+        return str.Split('\n').Select(value => value.Length > 0 ? 1 : 0).Sum();
+    }
 
     public static int Count(this string str, string part)
     {
-        int count = 0;
-        int i = 0;
-        while ((i = str.IndexOf(part, i)) != -1)
+        var count = 0;
+        var i = 0;
+        while ((i = str.IndexOf(part, i, StringComparison.Ordinal)) != -1)
         {
             i += part.Length;
             count++;
         }
+
         return count;
+    }
+
+    public static string TrimAll(this string str)
+    {
+        return str.Trim().Replace("\n", "")
+            .Replace("\\R", "")
+            .Replace("\\N", "");
+    }
+
+    public static string EscapedReturn(this string str)
+    {
+        return str.Replace("\\N", "\n")
+            .Replace("\\R", "\n");
     }
 
     public static string Remains(this TimeSpan timeSpan)
@@ -37,7 +75,9 @@ public static partial class Utils
 
 
     public static int MaxLineLength(this string str)
-        => str.Split('\n').Max(x => x.Trim().Length);
+    {
+        return str.Split('\n').Max(x => x.Trim().Length);
+    }
 
 
     public static IEnumerable<T> Contact<T>(params IEnumerable<T>[] arrays)
@@ -73,18 +113,13 @@ public static partial class Utils
         {
             if (b.CompareTo(c) < 0)
                 return b;
-            else if (a.CompareTo(c) < 0)
-                return c;
-            else
-                return a;
+            return a.CompareTo(c) < 0 ? c : a;
         }
 
 
         if (a.CompareTo(c) < 0)
             return a;
-        if (b.CompareTo(c) < 0)
-            return c;
-        return b;
+        return b.CompareTo(c) < 0 ? c : b;
     }
 
     public static void Extend(this Rectangle rect, int x, int y)
@@ -97,9 +132,26 @@ public static partial class Utils
 
     public static void Extend(this Rectangle rect, double ratio)
     {
+        switch (ratio)
+        {
+            case < 0:
+                return;
+            case < 1:
+                ratio = 1 + ratio;
+                break;
+        }
+
         var x = (int)(rect.Width * ratio);
         var y = (int)(rect.Height * ratio);
         rect.Extend(x, y);
+    }
+
+    public static void Limit(this Rectangle rect, Rectangle limit)
+    {
+        if (rect.X < limit.X) rect.X = limit.X;
+        if (rect.Y < limit.Y) rect.Y = limit.Y;
+        if (rect.Right > limit.Right) rect.X = limit.Right - rect.Width;
+        if (rect.Bottom > limit.Bottom) rect.Y = limit.Bottom - rect.Height;
     }
 
     public static Rectangle FromCenter(Point center, Size size)
@@ -159,10 +211,11 @@ public partial class Utils
         public static Timer SetTimeout(Action fn, long interval)
         {
             Timer? timer1 = null;
+            var timer2 = timer1;
             var callback = new TimerCallback(_ =>
             {
-                if (timer1 == null) fn.Invoke();
-                else timer1.Dispose();
+                if (timer2 == null) fn.Invoke();
+                else timer2.Dispose();
             });
             timer1 = new Timer(callback, null, interval, -1);
             return timer1;
@@ -173,6 +226,7 @@ public partial class Utils
             Timer? timer1 = null;
             var times2 = times;
 
+            var timer2 = timer1;
             var callback = times > 0
                 ? new TimerCallback(_ =>
                 {
@@ -180,7 +234,7 @@ public partial class Utils
                     {
                         try
                         {
-                            timer1!.Dispose();
+                            timer2!.Dispose();
                         }
                         catch (Exception)
                         {
@@ -191,7 +245,7 @@ public partial class Utils
                     {
                         try
                         {
-                            timer1!.Dispose();
+                            timer2!.Dispose();
                         }
                         catch (Exception)
                         {
@@ -201,14 +255,11 @@ public partial class Utils
                         return;
                     }
 
-                    if (times < times2)
-                    {
-                        times2 = times;
-                    }
+                    if (times < times2) times2 = times;
 
                     fn.Invoke();
                 })
-                : new TimerCallback(_ => { fn.Invoke(); });
+                : _ => { fn.Invoke(); };
 
             timer1 = new Timer(callback, null, interval, interval);
 

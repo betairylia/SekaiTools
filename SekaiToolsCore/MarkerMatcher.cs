@@ -1,16 +1,22 @@
 using System.Drawing;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
-using Emgu.CV.Structure;
 using SekaiToolsCore.Process;
 using SekaiStory = SekaiToolsCore.Story.Story;
 
 
 namespace SekaiToolsCore;
 
-public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateManager templateManager)
+public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateManager templateManager, Config config)
 {
     private readonly Dictionary<string, GaMat> _templates = new();
+
+    public readonly List<MarkerFrameSet> Set = storyData.Markers().Select(d => new MarkerFrameSet(d, videoInfo.Fps))
+        .ToList();
+
+    private MatchStatus _status;
+
+    public bool Finished => Set.All(d => d.Finished) || Set.Count == 0;
 
     private GaMat GetTemplate(string content)
     {
@@ -24,21 +30,6 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
         return _templates[content];
     }
 
-    private enum MatchStatus
-    {
-        NotMatched,
-        Dropped,
-        Matched,
-    }
-
-    private MatchStatus _status;
-
-    private struct MatchResult(Point point, MatchStatus status)
-    {
-        public readonly Point Point = point;
-        public readonly MatchStatus Status = status;
-    }
-
     private MatchResult MarkerMatch(Mat img, string text)
     {
         var templateAll = GetTemplate(text);
@@ -48,10 +39,11 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
 
         return _status switch
         {
-            MatchStatus.Matched => new MatchResult(matchedPoint, matchedPoint.IsEmpty ? MatchStatus.Dropped : MatchStatus.Matched),
+            MatchStatus.Matched => new MatchResult(matchedPoint,
+                matchedPoint.IsEmpty ? MatchStatus.Dropped : MatchStatus.Matched),
             MatchStatus.NotMatched or MatchStatus.Dropped => new MatchResult(matchedPoint,
                 matchedPoint.IsEmpty ? MatchStatus.NotMatched : MatchStatus.Matched),
-            _ => throw new ArgumentOutOfRangeException()
+            _ => throw new ArgumentOutOfRangeException(nameof(_status), _status, null)
         };
 
         Point LocalMatch(Mat src, GaMat tmp, TemplateMatchingType matchingType, Point startPos = default)
@@ -62,7 +54,7 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
 
             var imgCropped = new Mat(src, cropArea);
             var matchResult = Matcher.MatchTemplate(imgCropped, tmp, matchingType);
-            var matched = matchResult.MaxVal is > 0.75 and < 1;
+            var matched = matchResult.MaxVal > config.MatchingThreshold.Normal && matchResult.MaxVal < 1;
 
             if (!matched) return Point.Empty;
 
@@ -70,7 +62,8 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
 
             if (_status != MatchStatus.Matched) return result;
 
-            var resultRight = LocalMatch(src, tmp, matchingType, new Point(cropArea.Left + matchResult.MaxLoc.X + tmp.Size.Width, 0));
+            var resultRight = LocalMatch(src, tmp, matchingType,
+                new Point(cropArea.Left + matchResult.MaxLoc.X + tmp.Size.Width, 0));
 
             return resultRight.IsEmpty ? result : resultRight;
         }
@@ -85,13 +78,9 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
                 return Rectangle.Empty;
             if (size.Width < tmp.Size.Width || size.Height < tmp.Size.Height)
                 return Rectangle.Empty;
-            return new Rectangle(new Point(startPos.X, 0), size);
+            return new Rectangle(startPos with { Y = 0 }, size);
         }
-
     }
-
-    public readonly List<MarkerFrameSet> Set = storyData.Markers().Select(d => new MarkerFrameSet(d, videoInfo.Fps))
-        .ToList();
 
     private static int LastNotProcessedIndex(IReadOnlyList<MarkerFrameSet> set)
     {
@@ -101,7 +90,10 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
         return -1;
     }
 
-    public int LastNotProcessedIndex() => LastNotProcessedIndex(Set);
+    public int LastNotProcessedIndex()
+    {
+        return LastNotProcessedIndex(Set);
+    }
 
     public void Process(Mat frame, int frameIndex)
     {
@@ -124,5 +116,16 @@ public class MarkerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
         }
     }
 
-    public bool Finished => Set.All(d => d.Finished) || Set.Count == 0;
+    private enum MatchStatus
+    {
+        NotMatched,
+        Dropped,
+        Matched
+    }
+
+    private struct MatchResult(Point point, MatchStatus status)
+    {
+        public readonly Point Point = point;
+        public readonly MatchStatus Status = status;
+    }
 }

@@ -10,11 +10,58 @@ using SubtitleEvent = SekaiToolsCore.SubStationAlpha.Event;
 
 namespace SekaiToolsCore;
 
-public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager, TypewriterSetting typewriterSetting)
+public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager, Config config)
 {
+    private readonly List<Style> _styles = [];
+
+    private Point _nameTagPosition = new(0, 0);
+    private string FontName { get; } = config.FontName;
+    private TypewriterSetting TypewriterSetting { get; } = config.TyperSetting;
+
+    private bool ExportComment { get; } = config.ExportComment;
+
+    public Subtitle Make(
+        List<DialogFrameSet> dialogList,
+        List<BannerFrameSet> bannerList,
+        List<MarkerFrameSet> markerList)
+    {
+        var events = new List<SubtitleEvent>();
+
+        if (dialogList.Count != 0)
+        {
+            _nameTagPosition = dialogList[0].Frames[0].Point;
+            _styles.AddRange(MakeDialogStyles());
+            events.AddRange(MakeDialogEvents(dialogList));
+        }
+
+        if (bannerList.Count != 0)
+        {
+            _styles.AddRange(MakeBannerStyles());
+            events.AddRange(MakeBannerEvents(bannerList));
+        }
+
+        if (markerList.Count != 0)
+        {
+            _styles.AddRange(MakeMarkerStyles());
+            events.AddRange(MakeMarkerEvents(markerList));
+        }
+
+        if (!ExportComment) events.RemoveAll(e => e.Type == "Comment");
+
+        return new Subtitle(
+            new ScriptInfo(videoInfo.Resolution.Width, videoInfo.Resolution.Height),
+            new Garbage(Path.GetFileName(videoInfo.Path), Path.GetFileName(videoInfo.Path)),
+            new Styles(_styles.ToArray()),
+            new Events(events.ToArray())
+        );
+    }
+
     #region Dialog
 
-    private GaMat GetNameTag(string name) => new(templateManager.GetEbTemplate(name));
+    private GaMat GetNameTag(string name)
+    {
+        return new GaMat(templateManager.GetEbTemplate(name));
+    }
 
     private static Queue<char> FormatDialogBodyArr(string body)
     {
@@ -32,8 +79,8 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
     private string MakeDialogTypewriter(string body)
     {
         var queue = FormatDialogBodyArr(body);
-        var fadeTime = typewriterSetting.FadeTime;
-        var charTime = typewriterSetting.CharTime;
+        var fadeTime = TypewriterSetting.FadeTime;
+        var charTime = TypewriterSetting.CharTime;
         if (fadeTime <= 0 && charTime <= 0)
             return string.Join("", queue);
 
@@ -59,8 +106,8 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
     private string MakeDialogTypewriter(string body, int frameCount)
     {
         var queue = FormatDialogBodyArr(body);
-        var fadeTime = typewriterSetting.FadeTime;
-        var charTime = typewriterSetting.CharTime;
+        var fadeTime = TypewriterSetting.FadeTime;
+        var charTime = TypewriterSetting.CharTime;
         if (fadeTime <= 0 && charTime <= 0)
             return string.Join("", queue);
 
@@ -108,32 +155,32 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
 
         var charaFontsize = (int)(fontsize * 0.9);
         var charaOutlineSize = (int)Math.Ceiling(charaFontsize / 15.0);
-        const string fontName = "思源黑体 CN Bold";
+
 
         var blackColor = new AlphaColor(0, 255, 255, 255);
         var outlineColor = new AlphaColor(50, 73, 71, 102);
         var result = new List<Style>
         {
-            new("Line1", fontName, fontsize,
-                primaryColour: blackColor, outlineColour: outlineColor,
+            new("Line1", FontName, fontsize,
+                blackColor, outlineColour: outlineColor,
                 outline: outlineSize, shadow: 0, alignment: 7, marginL: marginH, marginR: marginH, marginV: marginV),
 
-            new("Line2", fontName, fontsize,
-                primaryColour: blackColor, outlineColour: outlineColor,
+            new("Line2", FontName, fontsize,
+                blackColor, outlineColour: outlineColor,
                 outline: outlineSize, shadow: 0, alignment: 7, marginL: marginH, marginR: marginH,
                 marginV: marginV + (int)(fontsize * 1.01)),
 
-            new("Line3", fontName, fontsize,
-                primaryColour: blackColor, outlineColour: outlineColor,
+            new("Line3", FontName, fontsize,
+                blackColor, outlineColour: outlineColor,
                 outline: outlineSize, shadow: 0, alignment: 7, marginL: marginH, marginR: marginH,
                 marginV: marginV + (int)(fontsize * 1.01 * 2)),
 
-            new("Character", fontName, charaFontsize,
-                primaryColour: blackColor, outlineColour: outlineColor,
+            new("Character", FontName, charaFontsize,
+                blackColor, outlineColour: outlineColor,
                 outline: charaOutlineSize, shadow: 0, alignment: 7),
 
-            new("Screen", fontName, charaFontsize,
-                primaryColour: blackColor, outlineColour: outlineColor,
+            new("Screen", FontName, charaFontsize,
+                blackColor, outlineColour: outlineColor,
                 outline: outlineSize, shadow: 0, alignment: 7)
         };
 
@@ -153,7 +200,7 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             dialogEvents.Add(SubtitleEvent.Comment($"{dialogMarker}  Start",
                 set.StartTime(), set.EndTime(), "Screen"));
 
-            if (set.NeedSetSeparator)
+            if (set.UseSeparator)
             {
                 var items = SeparateDialogSet(set);
                 dialogEvents.Add(SubtitleEvent.Comment($"{dialogMarker}  Line 1 ↓",
@@ -168,6 +215,8 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             }
             else
             {
+                if (set.Data.BodyTranslated.LineCount() == 3)
+                    set.Data.SetTranslationContent(set.Data.BodyTranslated.TrimAll());
                 dialogEvents.AddRange(GenerateDialogEvent(set));
             }
 
@@ -175,7 +224,8 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             {
                 dialogEvents.Add(SubtitleEvent.Comment($"{dialogMarker}  Debug ↓",
                     set.StartTime(), set.EndTime(), "Screen"));
-                var t = GenerateNoneJitterDialogEvents(set).Select(item => item.ToComment()).ToList();
+                var t = GenerateNoneJitterDialogEvents(set)
+                    .Select(item => item.ToComment()).ToList();
                 dialogEvents.AddRange(t);
             }
 
@@ -190,11 +240,6 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
 
         List<DialogFrameSet> SeparateDialogSet(DialogFrameSet dialogFrameSet)
         {
-            var content = dialogFrameSet.Data.FinalContent
-                .Replace("\n", "")
-                .Replace("\\N", "")
-                .Replace("\\R", "");
-
             var sepCount = dialogFrameSet.Separate.SeparateFrame - dialogFrameSet.StartIndex();
 
             var sepSet1 = new DialogFrameSet((Dialog)dialogFrameSet.Data.Clone(), videoInfo.Fps);
@@ -203,6 +248,7 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             sepSet1.Frames.AddRange(dialogFrameSet.Frames[..sepCount]);
             sepSet2.Frames.AddRange(dialogFrameSet.Frames[sepCount..]);
 
+            var content = dialogFrameSet.Data.FinalContent.TrimAll();
             sepSet1.Data.BodyTranslated = content[..dialogFrameSet.Separate.SeparatorContentIndex];
             sepSet2.Data.BodyTranslated = content[dialogFrameSet.Separate.SeparatorContentIndex..];
 
@@ -267,13 +313,9 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
                            + MakeDialogTypewriter(content, frame.Index - dialogFrameSet.StartIndex());
 
                 if (lastPosition.X == x && lastPosition.Y == y && body == dialogEvents[^1].Text)
-                {
                     dialogEvents[^1].End = frame.EndTime();
-                }
                 else
-                {
                     dialogEvents.Add(SubtitleEvent.Dialog(body, frame.StartTime(), frame.EndTime(), styleName));
-                }
 
                 if (lastPosition.X == x && lastPosition.Y == y && body == characterEvents[^1].Text)
                 {
@@ -342,9 +384,9 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             var contentItem = SubtitleEvent.Dialog(body, startTime, endTime, "BannerText");
 
             var cRec = Utils.FromCenter(center,
-                new Size((offset * 12) / 20 * 20, (int)(offset * 1.4) / 20 * 20));
+                new Size(offset * 12 / 20 * 20, (int)(offset * 1.4) / 20 * 20));
             var mRec = Utils.FromCenter(center,
-                new Size((offset * 12) / 20 * 20, (int)(offset * 2) / 20 * 20));
+                new Size(offset * 12 / 20 * 20, (int)(offset * 2.0) / 20 * 20));
             var mask = AssDraw.Rectangle(mRec).ToString();
             var clipLeft = (
                     Tags.Clip(0, cRec.Y, cRec.X, cRec.Y + cRec.Height) +
@@ -379,14 +421,14 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
         var fontsize = (int)((videoInfo.FrameRatio > 16.0 / 9
             ? videoInfo.Resolution.Height * 0.043
             : videoInfo.Resolution.Width * 0.024) * (70 / 61D));
-        const string fontName = "思源黑体 CN Bold";
+
 
         var whiteColor = new AlphaColor(0, 255, 255, 255);
         var outlineColor = new AlphaColor(30, 95, 92, 123);
-        result.Add(new Style("BannerMask", fontName, fontsize, primaryColour: outlineColor,
+        result.Add(new Style("BannerMask", FontName, fontsize, outlineColor,
             outlineColour: outlineColor,
             outline: 0, shadow: 0, alignment: 7));
-        result.Add(new Style("BannerText", fontName, fontsize, primaryColour: whiteColor,
+        result.Add(new Style("BannerText", FontName, fontsize, whiteColor,
             outlineColour: outlineColor,
             outline: 0, shadow: 0, alignment: 7));
         return result;
@@ -443,16 +485,15 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
                 var maskText = tagMask + mask;
                 var bodyText = tagText + content;
                 if (markerEventMask.Count > 0 && markerEventText.Count > 0)
-                {
                     if (markerEventMask[^1].Text == maskText && markerEventText[^1].Text == bodyText)
                     {
                         markerEventMask[^1].End = endTime;
                         markerEventText[^1].End = endTime;
                         continue;
                     }
-                }
+
                 markerEventMask.Add(
-                   SubtitleEvent.Dialog(maskText, startTime, endTime, "MarkerMask"));
+                    SubtitleEvent.Dialog(maskText, startTime, endTime, "MarkerMask"));
                 markerEventText.Add(
                     SubtitleEvent.Dialog(bodyText, startTime, endTime, "MarkerText"));
             }
@@ -467,56 +508,17 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
         var fontsize = (int)((videoInfo.FrameRatio > 16.0 / 9
             ? videoInfo.Resolution.Height * 0.043
             : videoInfo.Resolution.Width * 0.024) * (70 / 61D));
-        const string fontName = "思源黑体 CN Bold";
 
         var whiteColor = new AlphaColor(0, 255, 255, 255);
         var outlineColor = new AlphaColor(30, 95, 92, 123);
-        result.Add(new Style("MarkerMask", fontName, fontsize, primaryColour: outlineColor,
+        result.Add(new Style("MarkerMask", FontName, fontsize, outlineColor,
             outlineColour: outlineColor,
             outline: 0, shadow: 0, alignment: 7));
-        result.Add(new Style("MarkerText", fontName, fontsize, primaryColour: whiteColor,
+        result.Add(new Style("MarkerText", FontName, fontsize, whiteColor,
             outlineColour: outlineColor,
             outline: 0, shadow: 0, alignment: 7));
         return result;
     }
 
     #endregion
-
-    private Point _nameTagPosition = new(0, 0);
-    private readonly List<Style> _styles = [];
-
-    public Subtitle Make(
-        List<DialogFrameSet> dialogList,
-        List<BannerFrameSet> bannerList,
-        List<MarkerFrameSet> markerList)
-    {
-        var events = new List<SubtitleEvent>();
-
-        if (dialogList.Count != 0)
-        {
-            _nameTagPosition = dialogList[0].Frames[0].Point;
-            _styles.AddRange(MakeDialogStyles());
-            events.AddRange(MakeDialogEvents(dialogList));
-        }
-
-        if (bannerList.Count != 0)
-        {
-            _styles.AddRange(MakeBannerStyles());
-            events.AddRange(MakeBannerEvents(bannerList));
-        }
-
-        if (markerList.Count != 0)
-        {
-            _styles.AddRange(MakeMarkerStyles());
-            events.AddRange(MakeMarkerEvents(markerList));
-        }
-
-
-        return new Subtitle(
-            new ScriptInfo(videoInfo.Resolution.Width, videoInfo.Resolution.Height),
-            new Garbage(Path.GetFileName(videoInfo.Path), Path.GetFileName(videoInfo.Path)),
-            new Styles(_styles.ToArray()),
-            new Events(events.ToArray())
-        );
-    }
 }

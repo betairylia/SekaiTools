@@ -1,8 +1,9 @@
+using Newtonsoft.Json.Linq;
+
 namespace SekaiToolsCore.Story.Game;
 
-public struct Snippet
+public struct Snippet(int action, int index, int progressBehavior, int referenceIndex, int delay)
 {
-    public int Action;
     /*
      * 1 TalkData
      * 2 LayoutData Type=*
@@ -13,4 +14,20 @@ public struct Snippet
      * 7 SoundData
      * 8 ScenarioSnippetCharacterLayoutModes
      */
+    public readonly int Action = action;
+    public readonly int Index = index;
+    public readonly int ProgressBehavior = progressBehavior;
+    public readonly int ReferenceIndex = referenceIndex;
+    public readonly int Delay = delay;
+
+    public static Snippet FromJObject(JObject json)
+    {
+        return new Snippet(
+            json.Get("Action", 0),
+            json.Get("Index", 0),
+            json.Get("ProgressBehavior", 0),
+            json.Get("ReferenceIndex", 0),
+            json.Get("Delay", 0)
+        );
+    }
 }

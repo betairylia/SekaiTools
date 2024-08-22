@@ -5,9 +5,9 @@ namespace SekaiToolsCore.Story.Game;
 
 public class GameData
 {
-    internal Snippet[] Snippets;
-    internal SpecialEffect[] SpecialEffectData;
-    internal readonly Talk[] TalkData;
+    public readonly Snippet[] Snippets;
+    public readonly SpecialEffect[] SpecialEffectData;
+    public readonly Talk[] TalkData;
 
     public GameData(string jsonFilePath)
     {
@@ -16,60 +16,46 @@ public class GameData
         var jsonString = File.ReadAllText(jsonFilePath);
         var data = JsonConvert.DeserializeObject<JObject>(jsonString) ?? throw new Exception("Json parse error");
 
-        TalkData = data["TalkData"]!
-            .ToObject<JObject[]>()!
-            .Select(v => new Talk
-            {
-                WindowDisplayName = v["WindowDisplayName"]!.ToObject<string>()!,
-                Body = v["Body"]!.ToObject<string>()!,
-                WhenFinishCloseWindow = v["WhenFinishCloseWindow"]!.ToObject<int>(),
-                Voices = v["Voices"]!.ToObject<JObject[]>()!.Select(voice => new Voice
-                {
-                    Character2DId = voice["Character2dId"]!.ToObject<int>(),
-                    VoiceId = voice["VoiceId"]!.ToObject<string>()!
-                }).ToArray(),
-                Characters = v["TalkCharacters"]!.ToObject<JObject[]>()!.Select(c => new Talk.TalkCharacters
-                {
-                    Character2dId = c["Character2dId"]!.ToObject<int>()
-                }).ToArray()
-            }).ToArray();
+        TalkData = data.Get("TalkData", Array.Empty<JObject>())
+            .Select(Talk.FromJson).ToArray();
 
-        Snippets = data["Snippets"]!
-            .ToObject<JObject[]>()!
-            .Select(v => new Snippet { Action = v["Action"]!.ToObject<int>() })
+        Snippets = data.Get("Snippets", Array.Empty<JObject>())
+            .Select(Snippet.FromJObject)
             .ToArray();
 
-        SpecialEffectData = data["SpecialEffectData"]!
-            .ToObject<JObject[]>()!
-            .Select(v => new SpecialEffect
-            {
-                EffectType = v["EffectType"]!.ToObject<int>(),
-                StringVal = v["StringVal"]!.ToObject<string>() ?? string.Empty
-            })
+        SpecialEffectData = data.Get("SpecialEffectData", Array.Empty<JObject>())
+            .Select(SpecialEffect.FromJObject)
             .ToArray();
-        Clean();
-    }
 
-    private void Clean()
-    {
         List<int> shakeIndex = [];
-        var tdc = 0;
-        var sec = 0;
+        var talkDataCount = 0;
+        var spEffCount = 0;
+        var shaking = false;
         foreach (var item in Snippets)
-        {
             switch (item.Action)
             {
                 case 1:
-                    tdc += 1;
+                    if (shaking) shakeIndex.Add(talkDataCount);
+                    talkDataCount += 1;
                     break;
                 case 6:
                 {
-                    if (SpecialEffectData[sec].EffectType is 6) shakeIndex.Add(tdc - 1);
-                    sec += 1;
+                    var eff = SpecialEffectData[spEffCount];
+                    switch (eff.EffectType)
+                    {
+                        case 6:
+                            shakeIndex.Add(talkDataCount - 1);
+                            if (eff.Duration > 10) shaking = true;
+                            break;
+                        case 26:
+                            shaking = false;
+                            break;
+                    }
+
+                    spEffCount += 1;
                     break;
                 }
             }
-        }
 
         foreach (var i in shakeIndex) TalkData[i].Shake = true;
 
@@ -97,6 +83,6 @@ public class GameData
 
     public bool Empty()
     {
-        return TalkData.Length + Snippets.Length + SpecialEffectData.Length == 0;
+        return TalkData.Length + SpecialEffectData.Length == 0;
     }
 }

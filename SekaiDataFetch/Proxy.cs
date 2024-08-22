@@ -12,7 +12,7 @@ public class Proxy(
         Socks5,
         Http,
         System,
-        None,
+        None
     }
 
     public string Host { get; set; } = host;
@@ -20,6 +20,8 @@ public class Proxy(
     public string Username { get; set; } = username;
     public string Password { get; set; } = password;
     public Type ProxyType { get; set; } = proxyType;
+
+    public static Proxy None => new("", 0);
 
     public string GetProxyString()
     {
@@ -30,7 +32,7 @@ public class Proxy(
         return $"{ProxyType.ToString().ToLower()}://{Username}:{Password}@{Host}:{Port}";
     }
 
-    public void SetProxy(string host, int port, Proxy.Type proxyType = Proxy.Type.None, string username = "",
+    public void SetProxy(string host, int port, Type proxyType = Type.None, string username = "",
         string password = "")
     {
         Host = host;
@@ -48,6 +50,4 @@ public class Proxy(
         Username = proxy.Username;
         Password = proxy.Password;
     }
-
-    public static Proxy None => new Proxy("", 0, Type.None);
 }

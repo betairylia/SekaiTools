@@ -3,20 +3,22 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
+using Microsoft.Win32;
 using SekaiToolsCore;
 using SekaiToolsCore.Process;
 using SekaiToolsCore.Story;
 using SekaiToolsCore.Story.Event;
+using SekaiToolsGUI.View.Setting;
+using SekaiToolsGUI.View.Subtitle.Components;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
 using Wpf.Ui.Extensions;
-using MessageBox = System.Windows.MessageBox;
+using MessageBox = Wpf.Ui.Controls.MessageBox;
+using SaveFileDialog = SekaiToolsGUI.View.Subtitle.Components.SaveFileDialog;
 
 namespace SekaiToolsGUI.View.Subtitle;
 
@@ -87,6 +89,18 @@ public class SubtitlePageModel : ViewModelBase
         private set => SetProperty(value);
     }
 
+    public Visibility ResetEnabled
+    {
+        get => GetProperty(Visibility.Collapsed);
+        set => SetProperty(value);
+    }
+
+    public bool HasNotStarted
+    {
+        get => GetProperty(true);
+        set => SetProperty(value);
+    }
+
 
     private void SetRunningStatus()
     {
@@ -109,12 +123,6 @@ public class SubtitlePageModel : ViewModelBase
         FramePreviewImage = Mat.Zeros(100, 100, DepthType.Cv8U, 4).ToBitmapSource();
     }
 
-    public Visibility ResetEnabled
-    {
-        get => GetProperty(Visibility.Collapsed);
-        set => SetProperty(value);
-    }
-
     private void SetResetEnabled()
     {
         if (VideoFilePath != "" || ScriptFilePath != "" || TranslateFilePath != "" ||
@@ -123,17 +131,20 @@ public class SubtitlePageModel : ViewModelBase
         else
             ResetEnabled = Visibility.Collapsed;
     }
-
-    public bool HasNotStarted
-    {
-        get => GetProperty(true);
-        set => SetProperty(value);
-    }
 }
 
 public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageModel>
 {
-    public SubtitlePageModel ViewModel => (SubtitlePageModel)DataContext;
+    private BannerMatcher? _bannerMatcher;
+    private CancellationTokenSource? _cancellationTokenSource = new();
+    private ContentMatcher? _contentMatcher;
+    private DialogMatcher? _dialogMatcher;
+    private MarkerMatcher? _markerMatcher;
+    private MatcherCreator? _matcherCreator;
+
+    private Task? _task;
+
+    private VideoCapture? _videoCapture;
 
     public SubtitlePage()
     {
@@ -141,9 +152,12 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
         InitializeComponent();
     }
 
+    private CancellationToken CancellationToken => _cancellationTokenSource!.Token;
+    public SubtitlePageModel ViewModel => (SubtitlePageModel)DataContext;
+
     private static string? SelectFile(object sender, RoutedEventArgs e, string filter)
     {
-        var openFileDialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
+        var openFileDialog = new OpenFileDialog { Filter = filter };
         var result = openFileDialog.ShowDialog();
         return result == true ? openFileDialog.FileName : null;
     }
@@ -211,7 +225,7 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                     Title = "提示",
                     Content = "在该文件处发现了同名的文件，是否自动引入作为处理文件？",
                     PrimaryButtonText = "是",
-                    CloseButtonText = "否",
+                    CloseButtonText = "否"
                 }, token);
             return dialogResult == ContentDialogResult.Primary;
         }
@@ -241,17 +255,6 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
 
         await SelectSameNameFile(result);
     }
-
-    private VideoCapture? _videoCapture;
-    private MatcherCreator? _matcherCreator;
-    private DialogMatcher? _dialogMatcher;
-    private ContentMatcher? _contentMatcher;
-    private BannerMatcher? _bannerMatcher;
-    private MarkerMatcher? _markerMatcher;
-
-    private Task? _task;
-    private CancellationTokenSource? _cancellationTokenSource = new();
-    private CancellationToken CancellationToken => _cancellationTokenSource!.Token;
 
 
     private void ControlButton_OnClick(object sender, EventArgs arg)
@@ -300,8 +303,19 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
 
     private void StartProcess()
     {
+        var settings = new SettingPageModel();
         _matcherCreator =
-            new MatcherCreator(ViewModel.VideoFilePath, ViewModel.ScriptFilePath, ViewModel.TranslateFilePath);
+            new MatcherCreator(new Config(
+                ViewModel.VideoFilePath,
+                ViewModel.ScriptFilePath,
+                ViewModel.TranslateFilePath,
+                settings.FontFamily,
+                settings.ExportComment,
+                new TypewriterSetting(
+                    int.Min(settings.TypewriterFadeTime, settings.TypewriterCharTime),
+                    int.Max(settings.TypewriterFadeTime, settings.TypewriterCharTime)),
+                new MatchingThreshold(settings.ThresholdNormal, settings.ThresholdSpecial)
+            ));
         _videoCapture = new VideoCapture(ViewModel.VideoFilePath);
         _dialogMatcher = _matcherCreator.DialogMatcher();
         _contentMatcher = _matcherCreator.ContentMatcher();
@@ -335,6 +349,7 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                     snackService.Show("成功", "运行结束", ControlAppearance.Success,
                         new SymbolIcon(SymbolRegular.DocumentCheckmark24), new TimeSpan(0, 0, 3));
                 }
+
                 TextBlockETA.Text = "";
             });
         }, CancellationToken);
@@ -370,9 +385,6 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
             
             _videoCapture.Set(CapProp.PosFrames, debugFrameID);
         }
-        
-        // temporal workaround
-        _dialogMatcher._____Patch();
 
         var avgDuration = 0d;
         var frameIndex = 0;
@@ -399,7 +411,6 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                 if (!_contentMatcher.Finished)
                 {
                     _contentMatcher.Process(frame);
-
                     continue;
                 }
 
@@ -417,7 +428,7 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                     break;
                 }
 
-                if (!_bannerMatcher.Finished&&matchBannerNow  )
+                if (!_bannerMatcher.Finished && matchBannerNow)
                 {
                     var bannerIndex = _bannerMatcher.LastNotProcessedIndex();
                     _bannerMatcher.Process(frame, frameIndex);
@@ -425,7 +436,7 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                         LinePanel_AddBannerLine(_bannerMatcher.Set[bannerIndex]);
                 }
 
-                if (!_markerMatcher.Finished&& MatchMarkerNow()  )
+                if (!_markerMatcher.Finished && MatchMarkerNow())
                 {
                     var markerIndex = _markerMatcher.LastNotProcessedIndex();
                     _markerMatcher.Process(frame, frameIndex);
@@ -437,11 +448,11 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
             {
                 Dispatcher.Invoke(async () =>
                 {
-                    var uiMessageBox = new Wpf.Ui.Controls.MessageBox
+                    var uiMessageBox = new MessageBox
                     {
                         Title = "视频处理出错",
 
-                        Content = e.Message + "\n" + e.StackTrace,
+                        Content = e.Message + "\n" + e.StackTrace
                     };
 
                     await uiMessageBox.ShowDialogAsync(cancellationToken: CancellationToken);
@@ -478,7 +489,6 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                 _matcherCreator!.Story.GetTypes(Story.StoryEventType.Dialog | Story.StoryEventType.Marker)
             );
             while (events.TryDequeue(out var ev))
-            {
                 switch (ev)
                 {
                     case Dialog:
@@ -488,7 +498,6 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                         markerIndex.Add(dialogCount);
                         break;
                 }
-            }
 
             return markerIndex.Select(x => x < 0 ? 0 : x).ToList();
         }
@@ -513,11 +522,12 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                 avgDuration = avgDuration * (1 - alpha) + deltaTime * alpha;
 
             updateTime += deltaTime;
-            
+
             Dispatcher.Invoke(() =>
             {
                 if (TextBlockFps.Text != "" && TextBlockETA.Text != "")
-                    if (updateTime < 1000) { return; }
+                    if (updateTime < 1000)
+                        return;
                     else updateTime = 0;
 
                 var etaMs = (frameCount - frameIndex) * avgDuration;
@@ -532,40 +542,29 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
     {
         Dispatcher.Invoke(() =>
         {
-            var binding = new Binding("IsChecked")
-            {
-                Source = OnlyTooLongSwitch,
-                Converter = new InverseBooleanToVisibilityConverter(),
-                Mode = BindingMode.OneWay,
-            };
+            var needScroll = Math.Abs(LineViewer.ScrollableHeight - LineViewer.VerticalOffset) < 1;
             var line = new DialogLine(set)
             {
                 Margin = new Thickness(5, 5, 10, 5)
             };
-            if (!line.ViewModel.UseSeparator)
-                line.SetBinding(VisibilityProperty, binding);
             LinePanel.Children.Add(line);
-            LineViewer.ScrollToEnd();
+            if (needScroll) LineViewer.ScrollToEnd();
         });
     }
+
 
     private void LinePanel_AddBannerLine(BannerFrameSet set)
     {
         Dispatcher.Invoke(() =>
         {
-            var binding = new Binding("IsChecked")
-            {
-                Source = OnlyTooLongSwitch,
-                Converter = new InverseBooleanToVisibilityConverter(),
-                Mode = BindingMode.OneWay,
-            };
+            var needScroll = Math.Abs(LineViewer.ScrollableHeight - LineViewer.VerticalOffset) < 1;
+
             var line = new BannerLine(set)
             {
                 Margin = new Thickness(5, 5, 10, 5)
             };
-            line.SetBinding(VisibilityProperty, binding);
             LinePanel.Children.Add(line);
-            LineViewer.ScrollToEnd();
+            if (needScroll) LineViewer.ScrollToEnd();
         });
     }
 
@@ -573,19 +572,14 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
     {
         Dispatcher.Invoke(() =>
         {
-            var binding = new Binding("IsChecked")
-            {
-                Source = OnlyTooLongSwitch,
-                Converter = new InverseBooleanToVisibilityConverter(),
-                Mode = BindingMode.OneWay,
-            };
+            var needScroll = Math.Abs(LineViewer.ScrollableHeight - LineViewer.VerticalOffset) < 1;
+
             var line = new MarkerLine(set)
             {
                 Margin = new Thickness(5, 5, 10, 5)
             };
-            line.SetBinding(VisibilityProperty, binding);
             LinePanel.Children.Add(line);
-            LineViewer.ScrollToEnd();
+            if (needScroll) LineViewer.ScrollToEnd();
         });
     }
 
@@ -617,7 +611,8 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
     {
         var dialogService = (Application.Current.MainWindow as MainWindow)?.WindowContentDialogService!;
 
-        var dialog = new SaveFileDialog(dialogService.GetContentPresenter(), ViewModel.VideoFilePath);
+        var dialog = new SaveFileDialog(dialogService.GetDialogHost() ?? throw new InvalidOperationException(),
+            ViewModel.VideoFilePath);
         var token = new CancellationToken();
         var dialogResult = await dialogService.ShowAsync(dialog, token);
         if (dialogResult != ContentDialogResult.Primary) return;
@@ -636,7 +631,7 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
 
         void ShowFile(string path)
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe")
+            var psi = new ProcessStartInfo("Explorer.exe")
             {
                 Arguments = "/e,/select," + path
             };
@@ -649,12 +644,11 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
             List<DialogFrameSet> dialogFrameSets = [];
             List<MarkerFrameSet> markerFrameSets = [];
             foreach (var child in LinePanel.Children)
-            {
                 switch (child)
                 {
                     case DialogLine dialogLine:
                         var set = dialogLine.ViewModel.Set;
-                        set.Data.BodyTranslated.Replace("…", "..."); // 修正省略号
+                        set.Data.BodyTranslated = set.Data.BodyTranslated.Replace("…", "..."); // 修正省略号
                         dialogFrameSets.Add(dialogLine.ViewModel.Set);
                         break;
                     case BannerLine bannerLine:
@@ -664,7 +658,6 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
                         markerFrameSets.Add(markerLine.ViewModel.Set);
                         break;
                 }
-            }
 
             if (_matcherCreator == null) throw new NullReferenceException();
             var maker = _matcherCreator.SubtitleMaker();
@@ -708,5 +701,24 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
         e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop)
             ? DragDropEffects.Link
             : DragDropEffects.None;
+    }
+
+    private void OnlyTooLongSwitch_OnClick(object sender, RoutedEventArgs e)
+    {
+        var targetVisibility = OnlyTooLongSwitch.IsChecked ?? false ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var child in LinePanel.Children)
+            switch (child)
+            {
+                case DialogLine dialogLine:
+                    if (dialogLine.ViewModel.Set.NeedSetSeparator) continue;
+                    dialogLine.Visibility = targetVisibility;
+                    break;
+                case BannerLine bannerLine:
+                    bannerLine.Visibility = targetVisibility;
+                    break;
+                case MarkerLine markerLine:
+                    markerLine.Visibility = targetVisibility;
+                    break;
+            }
     }
 }

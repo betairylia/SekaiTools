@@ -4,16 +4,33 @@ using SekaiToolsCore.Process;
 
 namespace SekaiToolsCore;
 
-public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateManager templateManager)
+public class DialogMatcher(
+    VideoInfo videoInfo,
+    Story.Story storyData,
+    TemplateManager templateManager,
+    Config config
+)
 {
+    public readonly List<DialogFrameSet> Set =
+        storyData.Dialogs().Select(d => new DialogFrameSet(d, videoInfo.Fps)).ToList();
+
     private Point _nameTagPosition;
 
-    private GaMat GetNameTag(string name) => new(templateManager.GetEbTemplate(name));
+    private MatchStatus _status = 0;
 
-    private Point DialogMatchNameTag(Mat img, string content)
+    public bool Finished => Set.All(d => d.Finished) || Set.Count == 0;
+
+    private GaMat GetNameTag(string name)
     {
+        return new GaMat(templateManager.GetEbTemplate(name));
+    }
+
+    private Point DialogMatchNameTag(Mat img, DialogFrameSet dialog)
+    {
+        var content = dialog.Data.CharacterOriginal;
         var template = GetNameTag(TrimTemplateContent(content));
-        var res = LocalMatch(img, template, 0.7);
+        var res = LocalMatch(img, template,
+            dialog.Data.Shake ? config.MatchingThreshold.Special : config.MatchingThreshold.Normal);
         if (!res.IsEmpty && _nameTagPosition.IsEmpty) _nameTagPosition = res;
         return res;
 
@@ -32,17 +49,17 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
             var rect = new Rectangle
             {
                 X = (videoInfo.Resolution.Width - dialogAreaSize.Width) / 2,
-                Y = (videoInfo.Resolution.Height - dialogAreaSize.Height - ntt.Height) / 1,
-                Height = (int)(ntt.Height * 1.75),
-                Width = (int)(ntt.Width + ntt.Height * 0.8),
+                // Y = (videoInfo.Resolution.Height - dialogAreaSize.Height - ntt.Height) / 1,
+                // Height = (int)(ntt.Height * 1.75),
+                // Width = (int)(ntt.Width + ntt.Height * 0.8),
+                Y = (videoInfo.Resolution.Height - dialogAreaSize.Height - (int)(ntt.Height * 1.1)) / 1,
+                Height = (int)(ntt.Height * 1.8),
+                Width = (int)(ntt.Width + ntt.Height * 0.8)
             };
+            if (dialog.Data.Shake)
+                rect.Extend(0.4);
 
-            if (rect.X < 0) rect.X = 0;
-            if (rect.Y < 0) rect.Y = 0;
-            if (rect.X + rect.Width > img.Size.Width)
-                rect.Width = img.Size.Width - rect.X;
-            if (rect.Y + rect.Height > img.Size.Height)
-                rect.Height = img.Size.Height - rect.Y;
+            rect.Limit(new Rectangle(Point.Empty, videoInfo.Resolution));
             return rect;
         }
 
@@ -79,8 +96,9 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
         }
     }
 
-    private MatchStatus DialogMatchContent(Mat img, string content, Point point, MatchStatus lastStatus = 0)
+    private MatchStatus DialogMatchContent(Mat img, DialogFrameSet dialog, Point point, MatchStatus lastStatus = 0)
     {
+        var content = dialog.Data.BodyOriginal;
         if (point.X == 0) return 0;
         var charTemplates = GetDialogInd();
         var template1 = charTemplates[0];
@@ -89,30 +107,32 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
 
         bool matchRes;
 
+        var matchingThreshold = dialog.Data.Shake ? config.MatchingThreshold.Special : config.MatchingThreshold.Normal;
+
         switch (lastStatus)
         {
             case MatchStatus.DialogNotMatched:
             {
-                matchRes = LocalMatch(img, template1);
+                matchRes = LocalMatch(img, template1, matchingThreshold);
                 return matchRes ? MatchStatus.DialogMatched1 : MatchStatus.DialogNotMatched;
             }
             case MatchStatus.DialogMatched1:
             {
-                matchRes = LocalMatch(img, template2);
+                matchRes = LocalMatch(img, template2, matchingThreshold);
                 if (matchRes) return MatchStatus.DialogMatched2;
-                matchRes = LocalMatch(img, template1);
+                matchRes = LocalMatch(img, template1, matchingThreshold);
                 return matchRes ? MatchStatus.DialogMatched1 : MatchStatus.DialogDropped;
             }
             case MatchStatus.DialogMatched2:
             {
-                matchRes = LocalMatch(img, template3);
+                matchRes = LocalMatch(img, template3, matchingThreshold);
                 if (matchRes) return MatchStatus.DialogMatched3;
-                matchRes = LocalMatch(img, template2);
+                matchRes = LocalMatch(img, template2, matchingThreshold);
                 return matchRes ? MatchStatus.DialogMatched2 : MatchStatus.DialogDropped;
             }
             case MatchStatus.DialogMatched3:
             {
-                matchRes = LocalMatch(img, template3);
+                matchRes = LocalMatch(img, template3, matchingThreshold);
                 return matchRes ? MatchStatus.DialogMatched3 : MatchStatus.DialogDropped;
             }
             case MatchStatus.NameTagNotMatched:
@@ -122,15 +142,20 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
         }
 
 
-        bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.74)
+        // bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.74)
+        bool LocalMatch(Mat src, GaMat tmp, double threshold = 0.65)
         {
             var offset = templateManager.DbTemplateMaxSize().Height;
             Rectangle dialogStartPosition = new(
-                x: point.X + (int)(0.1 * offset),
-                y: point.Y + (int)(1.1 * offset),
-                width: (int)(3.6 * offset),
-                height: (int)(1.6 * offset)
+                point.X + (int)(0.1 * offset),
+                point.Y + (int)(1.0 * offset),
+                (int)(3.5 * offset),
+                (int)(1.8 * offset)
             );
+            if (dialog.Data.Shake)
+                dialogStartPosition.Extend(0.4);
+            dialogStartPosition.Limit(new Rectangle(Point.Empty, videoInfo.Resolution));
+
             var imgCropped = new Mat(src, dialogStartPosition);
             var result = Matcher.MatchTemplate(imgCropped, tmp);
             return result.MaxVal > threshold && result.MaxVal < 1;
@@ -147,9 +172,6 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
             return [new GaMat(mat1), new GaMat(mat2), new GaMat(mat3)];
         }
     }
-
-    public readonly List<DialogFrameSet> Set =
-        storyData.Dialogs().Select(d => new DialogFrameSet(d, videoInfo.Fps)).ToList();
     
     private static int LastNotProcessedIndex(IReadOnlyList<DialogFrameSet> set)
     {
@@ -158,7 +180,7 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
                 return i;
         return -1;
     }
-
+    
     public int DebugSetFinishedUntilContains(string targetString, string speaker = null) =>
         DebugSetFinishedUntilContains(Set, targetString, speaker);
     
@@ -186,18 +208,7 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
         }
     }
 
-    public void _____Patch()
-    {
-        Set[69].Data.Shake = true;
-        Set[70].Data.Shake = true;
-        Set[71].Data.Shake = true;
-    }
-
     public int LastNotProcessedIndex() => LastNotProcessedIndex(Set);
-
-    private MatchStatus _status = 0;
-
-    public bool Finished => Set.All(d => d.Finished) || Set.Count == 0;
 
     public bool Process(Mat frame, int frameIndex)
     {
@@ -223,25 +234,11 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
         return IsStatusMatched(matchResult.Status);
     }
 
-    private enum MatchStatus
+    private static bool IsStatusMatched(MatchStatus status)
     {
-        NameTagNotMatched = -2,
-        DialogNotMatched = 0,
-        DialogMatched1 = 1,
-        DialogMatched2 = 2,
-        DialogMatched3 = 3,
-        DialogDropped = -1,
-    }
-
-    private static bool IsStatusMatched(MatchStatus status) => status is MatchStatus.DialogMatched1
-        or MatchStatus.DialogMatched2
-        or MatchStatus.DialogMatched3;
-
-
-    private struct MatchResult(Point point, MatchStatus status)
-    {
-        public readonly Point Point = point;
-        public readonly MatchStatus Status = status;
+        return status is MatchStatus.DialogMatched1
+            or MatchStatus.DialogMatched2
+            or MatchStatus.DialogMatched3;
     }
 
     private MatchResult MatchForDialog(Mat frame, DialogFrameSet dialog)
@@ -251,7 +248,7 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
             lastStatus = MatchStatus.DialogNotMatched;
         Point point;
         if (dialog.Data.Shake || dialog.IsEmpty)
-            point = DialogMatchNameTag(frame, dialog.Data.CharacterOriginal);
+            point = DialogMatchNameTag(frame, dialog);
         else
             point = dialog.Start().Point;
 
@@ -260,6 +257,23 @@ public class DialogMatcher(VideoInfo videoInfo, Story.Story storyData, TemplateM
                 ? MatchStatus.DialogDropped
                 : MatchStatus.NameTagNotMatched);
 
-        return new MatchResult(point, DialogMatchContent(frame, dialog.Data.BodyOriginal, point, lastStatus));
+        return new MatchResult(point, DialogMatchContent(frame, dialog, point, lastStatus));
+    }
+
+    private enum MatchStatus
+    {
+        NameTagNotMatched = -2,
+        DialogNotMatched = 0,
+        DialogMatched1 = 1,
+        DialogMatched2 = 2,
+        DialogMatched3 = 3,
+        DialogDropped = -1
+    }
+
+
+    private struct MatchResult(Point point, MatchStatus status)
+    {
+        public readonly Point Point = point;
+        public readonly MatchStatus Status = status;
     }
 }

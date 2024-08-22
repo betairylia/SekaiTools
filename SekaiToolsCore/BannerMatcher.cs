@@ -1,14 +1,23 @@
 using System.Drawing;
 using Emgu.CV;
-using Emgu.CV.CvEnum;
 using SekaiToolsCore.Process;
 using SekaiStory = SekaiToolsCore.Story.Story;
 
 namespace SekaiToolsCore;
 
-public class BannerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateManager templateManager)
+public class BannerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateManager templateManager, Config config)
 {
-    private GaMat GetTemplate(string content) => new GaMat(templateManager.GetDbTemplate(content));
+    public readonly List<BannerFrameSet> Set = storyData.Banners().Select(d => new BannerFrameSet(d, videoInfo.Fps))
+        .ToList();
+
+    private MatchStatus _status;
+
+    public bool Finished => Set.All(d => d.Finished) || Set.Count == 0;
+
+    private GaMat GetTemplate(string content)
+    {
+        return new GaMat(templateManager.GetDbTemplate(content));
+    }
 
 
     private static string TrimContent(string content)
@@ -33,32 +42,24 @@ public class BannerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
     {
         var sText = TrimContent(text);
         var template = GetTemplate(sText);
-        var match = LocalMatch(img, template, TemplateMatchingType.CcoeffNormed);
+        var match = LocalMatch(img, template);
 
-        switch (_status)
+        return _status switch
         {
-            case MatchStatus.Matched:
-                return match ? MatchStatus.Matched : MatchStatus.Dropped;
-            case MatchStatus.NotMatched:
-            case MatchStatus.Dropped:
-                return match ? MatchStatus.Matched : MatchStatus.NotMatched;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
+            MatchStatus.Matched => match ? MatchStatus.Matched : MatchStatus.Dropped,
+            MatchStatus.NotMatched or MatchStatus.Dropped => match ? MatchStatus.Matched : MatchStatus.NotMatched,
+            _ => throw new ArgumentOutOfRangeException(nameof(_status), _status, null)
+        };
 
-
-        bool LocalMatch(Mat src, GaMat tmp, TemplateMatchingType matchingType)
+        bool LocalMatch(Mat src, GaMat tmp)
         {
             var cropArea = Utils.FromCenter(
                 img.Size.Center(), new Size((int)(tmp.Size.Height * text.Length * 1.5), (int)(tmp.Size.Height * 1.5)));
             var imgCropped = new Mat(src, cropArea);
-            var result = Matcher.MatchTemplate(imgCropped, tmp, matchingType);
-            return result.MaxVal is > 0.7 and < 1;
+            var result = Matcher.MatchTemplate(imgCropped, tmp);
+            return !(result.MaxVal < config.MatchingThreshold.Normal) && !(result.MaxVal > 1);
         }
     }
-
-    public readonly List<BannerFrameSet> Set = storyData.Banners().Select(d => new BannerFrameSet(d, videoInfo.Fps))
-        .ToList();
 
     private static int LastNotProcessedIndex(IReadOnlyList<BannerFrameSet> set)
     {
@@ -68,16 +69,10 @@ public class BannerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
         return -1;
     }
 
-    public int LastNotProcessedIndex() => LastNotProcessedIndex(Set);
-
-    private enum MatchStatus
+    public int LastNotProcessedIndex()
     {
-        NotMatched,
-        Matched,
-        Dropped
+        return LastNotProcessedIndex(Set);
     }
-
-    private MatchStatus _status;
 
     public void Process(Mat frame, int frameIndex)
     {
@@ -99,5 +94,10 @@ public class BannerMatcher(VideoInfo videoInfo, SekaiStory storyData, TemplateMa
         }
     }
 
-    public bool Finished => Set.All(d => d.Finished) || Set.Count == 0;
+    private enum MatchStatus
+    {
+        NotMatched,
+        Matched,
+        Dropped
+    }
 }

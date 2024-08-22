@@ -1,29 +1,31 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media.Effects;
 using Microsoft.Win32;
 using SekaiToolsCore.Story;
 using SekaiToolsCore.Story.Event;
 using SekaiToolsCore.Story.Game;
 using SekaiToolsCore.Story.Translation;
+using SekaiToolsGUI.View.Translate.Components;
 using Wpf.Ui;
 using Wpf.Ui.Controls;
+using SaveFileDialog = SekaiToolsGUI.View.Translate.Components.SaveFileDialog;
 
 namespace SekaiToolsGUI.View.Translate;
 
 public partial class TranslatePage : UserControl
 {
+    private string _scriptPath = "";
+
+    private Story? _story;
+    private string _translationPath = "";
+
     public TranslatePage()
     {
         InitializeComponent();
     }
-
-    private string _scriptPath = "";
-    private string _translationPath = "";
-
-    private Story? _story;
 
     private Story? Story
     {
@@ -48,26 +50,31 @@ public partial class TranslatePage : UserControl
                             Margin = new Thickness(5)
                         });
                         if (dialog.CloseWindow)
-                            TranslatePanel.Children.Add(new TranslateLineEmpty()
+                            TranslatePanel.Children.Add(new TranslateLineEmpty
                             {
                                 Margin = new Thickness(5)
                             });
                     }
                     else
+                    {
                         TranslatePanel.Children.Add(new TranslateLineEffect(@event)
                         {
                             Margin = new Thickness(5)
                         });
+                    }
                 });
             }
         }
     }
 
+    private static ISnackbarService SnackbarService =>
+        ((MainWindow)Application.Current.MainWindow!).WindowSnackbarService;
+
     private void LoadFileButton_OnClick(object sender, RoutedEventArgs e)
     {
         var openFileDialog = new OpenFileDialog
         {
-            Filter = "剧本文件|*.json;*.asset",
+            Filter = "剧本文件|*.json;*.asset"
         };
 
         if (openFileDialog.ShowDialog() != true) return;
@@ -101,17 +108,14 @@ public partial class TranslatePage : UserControl
 
         var openFileDialog = new OpenFileDialog
         {
-            Filter = "Text files (*.txt)|*.txt",
+            Filter = "Text files (*.txt)|*.txt"
         };
 
         if (openFileDialog.ShowDialog() != true) return;
         var filePath = openFileDialog.FileName;
 
         var tData = new TranslationData(filePath);
-        foreach (var t in tData.Translations)
-        {
-            t.Body = t.Body.Replace("\\N", "\n");
-        }
+        foreach (var t in tData.Translations) t.Body = t.Body.Replace("\\N", "\n");
 
         var gData = new GameData(_scriptPath);
 
@@ -128,9 +132,6 @@ public partial class TranslatePage : UserControl
                 new SymbolIcon(SymbolRegular.DocumentDismiss24), TimeSpan.FromSeconds(3));
         }
     }
-
-    private static ISnackbarService SnackbarService =>
-        ((MainWindow)Application.Current.MainWindow!).WindowSnackbarService;
 
 
     private void ResetButton_OnClick(object sender, RoutedEventArgs e)
@@ -151,7 +152,9 @@ public partial class TranslatePage : UserControl
 
         var dialogService = (Application.Current.MainWindow as MainWindow)?.WindowContentDialogService!;
 
-        var dialog = new SaveFileDialog(dialogService.GetContentPresenter(), _scriptPath, _translationPath);
+        var dialog = new SaveFileDialog(
+            dialogService.GetDialogHost() ?? throw new InvalidOperationException(),
+            _scriptPath, _translationPath);
         var token = new CancellationToken();
         var dialogResult = await dialogService.ShowAsync(dialog, token);
         if (dialogResult != ContentDialogResult.Primary) return;
@@ -170,23 +173,19 @@ public partial class TranslatePage : UserControl
 
         void ShowFile(string path)
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe")
+            var psi = new ProcessStartInfo("Explorer.exe")
             {
                 Arguments = "/e,/select," + path
             };
-            System.Diagnostics.Process.Start(psi);
+            Process.Start(psi);
         }
 
         string ExportTranslation()
         {
             var translation = new StringBuilder();
             foreach (UIElement child in TranslatePanel.Children)
-            {
                 if (child is IExportable exportable)
-                {
                     translation.AppendLine(exportable.Export());
-                }
-            }
 
             return translation.ToString();
         }

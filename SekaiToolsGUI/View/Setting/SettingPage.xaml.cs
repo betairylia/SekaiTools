@@ -4,13 +4,87 @@ using System.Windows;
 using System.Windows.Controls;
 using Newtonsoft.Json;
 using SekaiDataFetch;
+using SekaiToolsGUI.View.Setting.Components;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace SekaiToolsGUI.View.Setting;
 
+public struct Setting
+{
+    public string AppVersion { get; init; }
+    public int CurrentApplicationTheme { get; init; }
+    public string[] CustomSpecialCharacters { get; init; }
+
+    public int ProxyType { get; init; }
+    public string ProxyHost { get; init; }
+
+    public int ProxyPort { get; init; }
+
+    // public string ProxyUsername { get; init; }
+    // public string ProxyPassword { get; init; }
+
+    public int TypewriterFadeTime { get; init; }
+    public int TypewriterCharTime { get; init; }
+    public double ThresholdNormal { get; init; }
+    public double ThresholdSpecial { get; init; }
+
+    public bool ExportComment { get; init; }
+
+    public string FontFamily { get; init; }
+
+    public static Setting Default => new()
+    {
+        ProxyType = 0,
+        ProxyHost = "127.0.0.1",
+        ProxyPort = 1080,
+        TypewriterFadeTime = 50,
+        TypewriterCharTime = 80,
+        ThresholdNormal = 0.7,
+        ThresholdSpecial = 0.7,
+        ExportComment = true,
+        FontFamily = "思源黑体 CN Bold"
+    };
+
+    public static Setting FromModel(SettingPageModel model)
+    {
+        return new Setting
+        {
+            AppVersion = SettingPageModel.AppVersion,
+            CurrentApplicationTheme = model.CurrentApplicationTheme,
+            CustomSpecialCharacters = model.CustomSpecialCharacters.ToArray(),
+            ProxyType = model.ProxyType,
+            ProxyHost = model.ProxyHost,
+            ProxyPort = model.ProxyPort,
+            TypewriterFadeTime = model.TypewriterFadeTime,
+            TypewriterCharTime = model.TypewriterCharTime,
+            ThresholdNormal = model.ThresholdNormal,
+            ThresholdSpecial = model.ThresholdSpecial,
+            FontFamily = model.FontFamily,
+            ExportComment = model.ExportComment
+        };
+    }
+
+    public string Dump()
+    {
+        return JsonConvert.SerializeObject(this, Formatting.Indented);
+    }
+
+    public static Setting Load(string filepath)
+    {
+        return !File.Exists(filepath) ? Default : JsonConvert.DeserializeObject<Setting>(File.ReadAllText(filepath));
+    }
+}
+
 public class SettingPageModel : ViewModelBase
 {
+    public readonly List<string> CustomSpecialCharacters = [];
+
+    public SettingPageModel()
+    {
+        LoadSetting();
+    }
+
     public int CurrentApplicationTheme
     {
         get => GetProperty(0);
@@ -42,8 +116,6 @@ public class SettingPageModel : ViewModelBase
         }
     }
 
-    public readonly List<string> CustomSpecialCharacters = [];
-
     public int ProxyType
     {
         get => GetProperty(0);
@@ -58,9 +130,12 @@ public class SettingPageModel : ViewModelBase
     public Visibility ProxyChangeable
     {
         get => GetProperty(Visibility.Collapsed);
-        set => SetProperty(value);
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
     }
-
 
     public string ProxyHost
     {
@@ -82,90 +157,155 @@ public class SettingPageModel : ViewModelBase
         }
     }
 
-    public Proxy GetProxy() => new(ProxyHost, ProxyPort, ProxyType switch
+    public int TypewriterFadeTime
     {
-        0 => Proxy.Type.None,
-        1 => Proxy.Type.Http,
-        2 => Proxy.Type.Socks5,
-        _ => throw new ArgumentOutOfRangeException()
-    });
-
-    // public string ProxyUsername
-    // {
-    //     get => GetProperty("");
-    //     set => SetProperty(value);
-    // }
-    //
-    // public string ProxyPassword
-    // {
-    //     get => GetProperty("");
-    //     set => SetProperty(value);
-    // }
-
-
-    public struct Setting
-    {
-        public int CurrentApplicationTheme { get; init; }
-        public string[] CustomSpecialCharacters { get; init; }
-
-        public int ProxyType { get; init; }
-        public string ProxyHost { get; init; }
-        public int ProxyPort { get; init; }
-        public string ProxyUsername { get; init; }
-        public string ProxyPassword { get; init; }
+        get => GetProperty(50);
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
     }
 
+    public int TypewriterCharTime
+    {
+        get => GetProperty(80);
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
+    }
 
-    private static string GetSettingPath() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+    public double ThresholdNormal
+    {
+        get => GetProperty(0.7d);
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
+    }
+
+    public double ThresholdSpecial
+    {
+        get => GetProperty(0.55d);
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
+    }
+
+    public string FontFamily
+    {
+        get => GetProperty("思源黑体 CN Bold");
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
+    }
+
+    public bool ExportComment
+    {
+        get => GetProperty(true);
+        set
+        {
+            SetProperty(value);
+            SaveSetting();
+        }
+    }
+
+    public static string AppVersion
+        => (Application.ResourceAssembly.GetName().Version ??
+            new Version(0, 0, 0, 0)).ToString();
+
+    public Proxy GetProxy()
+    {
+        return new Proxy(ProxyHost, ProxyPort, ProxyType switch
+        {
+            0 => Proxy.Type.None,
+            1 => Proxy.Type.Http,
+            2 => Proxy.Type.Socks5,
+            _ => throw new ArgumentOutOfRangeException()
+        });
+    }
+
+    private static string GetSettingPath()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "SekaiTools", "Data", "setting.json");
+    }
 
     public void SaveSetting()
     {
-        var setting = new Setting
-        {
-            CurrentApplicationTheme = CurrentApplicationTheme,
-            CustomSpecialCharacters = CustomSpecialCharacters.ToArray(),
-            ProxyType = ProxyType,
-            ProxyHost = ProxyHost,
-            ProxyPort = ProxyPort,
-            // ProxyUsername = ProxyUsername,
-            // ProxyPassword = ProxyPassword
-        };
-        var json = JsonConvert.SerializeObject(setting);
+        var setting = Setting.FromModel(this);
         Directory.CreateDirectory(Path.GetDirectoryName(GetSettingPath())!);
-        File.WriteAllText(GetSettingPath(), json, Encoding.UTF8);
+        File.WriteAllText(GetSettingPath(), setting.Dump(), Encoding.UTF8);
     }
 
     public void LoadSetting()
     {
-        if (!File.Exists(GetSettingPath())) return;
-        var json = File.ReadAllText(GetSettingPath(), Encoding.UTF8);
-        var setting = JsonConvert.DeserializeObject<Setting>(json);
+        var setting = Setting.Load(GetSettingPath());
+
         CurrentApplicationTheme = setting.CurrentApplicationTheme;
         CustomSpecialCharacters.AddRange(setting.CustomSpecialCharacters);
         ProxyType = setting.ProxyType;
         ProxyHost = setting.ProxyHost;
         ProxyPort = setting.ProxyPort;
-        // ProxyUsername = setting.ProxyUsername;
-        // ProxyPassword = setting.ProxyPassword;
+
+        if (AppVersion != setting.AppVersion)
+        {
+            TypewriterFadeTime = Setting.Default.TypewriterFadeTime;
+            TypewriterCharTime = Setting.Default.TypewriterCharTime;
+            ThresholdNormal = Setting.Default.ThresholdNormal;
+            ThresholdSpecial = Setting.Default.ThresholdSpecial;
+            FontFamily = Setting.Default.FontFamily;
+            ExportComment = Setting.Default.ExportComment;
+        }
+        else
+        {
+            TypewriterFadeTime = setting.TypewriterFadeTime;
+            TypewriterCharTime = setting.TypewriterCharTime;
+            ThresholdNormal = setting.ThresholdNormal;
+            ThresholdSpecial = setting.ThresholdSpecial;
+            FontFamily = setting.FontFamily == "" ? Setting.Default.FontFamily : setting.FontFamily;
+            ExportComment = setting.ExportComment;
+        }
+
         SaveSetting();
     }
-
-    public SettingPageModel() => LoadSetting();
-
-    public static string AppVersion
-        => (Application.ResourceAssembly.GetName().Version ??
-            new Version(0, 0, 0, 0)).ToString();
 }
 
 public partial class SettingPage : UserControl, INavigableView<SettingPageModel>
 {
-    public SettingPageModel ViewModel => (SettingPageModel)DataContext;
+    private int _devClickCount;
 
     public SettingPage()
     {
         DataContext = ((MainWindowViewModel)Application.Current.MainWindow!.DataContext).SettingPageModel;
         InitializeComponent();
+    }
+
+    public SettingPageModel ViewModel => (SettingPageModel)DataContext;
+
+    private void DevClick(object sender, RoutedEventArgs e)
+    {
+        _devClickCount++;
+        if (_devClickCount == 5) ControlThreshold.Visibility = Visibility.Visible;
+    }
+
+    private async void ChooseFont(object sender, RoutedEventArgs e)
+    {
+        var dialogService = (Application.Current.MainWindow as MainWindow)?.WindowContentDialogService!;
+
+        var dialog = new FontSelectDialog(ViewModel.FontFamily);
+
+        var token = new CancellationToken();
+        var dialogResult = await dialogService.ShowAsync(dialog, token);
+        if (dialogResult != ContentDialogResult.Primary) return;
+
+        ViewModel.FontFamily = dialog.FontName;
     }
 }

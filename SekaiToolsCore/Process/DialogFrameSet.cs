@@ -3,63 +3,115 @@ using SekaiToolsCore.Story.Event;
 
 namespace SekaiToolsCore.Process;
 
-public class DialogFrameSet(Dialog data, FrameRate fps)
+public class DialogFrameResult(int index, FrameRate fps, Point point) : Frame(index, fps)
 {
-    public class DialogFrameResult(int index, FrameRate fps, Point point) : Frame(index, fps)
-    {
-        public Point Point => point;
-    }
+    public Point Point => point;
+}
 
-    public readonly List<DialogFrameResult> Frames = [];
-    public readonly Dialog Data = data;
-    public readonly FrameRate Fps = fps;
+public struct Separator
+{
+    public int SeparateFrame { get; set; }
+    public int SeparatorContentIndex { get; set; }
+}
+
+public partial class DialogFrameSet
+{
     private const int FrameIndexOffset = -1;
+    public readonly Dialog Data;
+    public readonly FrameRate Fps;
+    public readonly List<DialogFrameResult> Frames = new();
 
-    public void Add(int index, Rectangle rect) =>
-        Frames.Add(new DialogFrameResult(index + FrameIndexOffset, Fps, rect.Location));
+    public Separator Separate;
 
-    public void Add(int index, Point point) =>
-        Frames.Add(new DialogFrameResult(index + FrameIndexOffset, Fps, point));
+    public DialogFrameSet(Dialog data, FrameRate fps)
+    {
+        Data = data;
+        Fps = fps;
+        UseSeparator = NeedSetSeparator;
+
+        #region InitSeparatorContentIndex
+
+        int separatorContentIndex;
+
+        if (Data.BodyTranslated.Contains("\\R"))
+            separatorContentIndex = Data.BodyTranslated
+                .Replace("\n", "").Replace("\\N", "")
+                .IndexOf("\\R", StringComparison.Ordinal);
+        else if (Data.BodyTranslated.Count(c => c == '\n') == 1)
+            separatorContentIndex = Data.BodyTranslated
+                .IndexOf("\\R", StringComparison.Ordinal);
+        else
+            separatorContentIndex = Data.BodyTranslated.TrimAll().Length / 2;
+
+        Separate.SeparatorContentIndex = separatorContentIndex;
+
+        #endregion
+    }
 
     public bool IsEmpty => Frames.Count == 0;
 
     public bool IsJitter => Data.Shake;
 
-    public DialogFrameResult Start() => Frames[0];
-
-    public DialogFrameResult End() => Frames[^1];
-
-    public string StartTime() => Start().StartTime();
-
-    public string EndTime() => End().EndTime();
-
-    public int StartIndex() => Start().Index;
-
-    public int EndIndex() => End().Index;
-
     public bool Finished { get; set; }
-
 
     public bool NeedSetSeparator => Data.BodyTranslated != string.Empty &&
                                     Data.BodyOriginal.LineCount() == 3 &&
-                                    Data.BodyTranslated.Replace("\n", "")
-                                        .Replace("\\R", "").Replace("\\N", "")
-                                        .Length > 37;
+                                    Data.BodyTranslated.TrimAll().Length > 37;
 
-    public struct Separator
+    public bool UseSeparator { get; set; }
+
+    public void InitSeparator()
     {
-        public int SeparateFrame { get; set; }
-        public int SeparatorContentIndex { get; set; }
+        Separate.SeparateFrame = Utils.Middle(StartIndex() + 1, EndIndex() - 1,
+            StartIndex() + Frames.Count / 2);
     }
-
-    public Separator Separate { get; set; }
 
     public void SetSeparator(int separateFrame, int separatorContentIndex)
     {
-        Separate = new Separator
-        {
-            SeparateFrame = separateFrame,
-            SeparatorContentIndex = separatorContentIndex
-        };
+        Separate.SeparateFrame = separateFrame;
+        Separate.SeparatorContentIndex = separatorContentIndex;
+    }
+}
+
+public partial class DialogFrameSet
+{
+    public DialogFrameResult Start()
+    {
+        return Frames[0];
+    }
+
+    public DialogFrameResult End()
+    {
+        return Frames[^1];
+    }
+
+    public string StartTime()
+    {
+        return Start().StartTime();
+    }
+
+    public string EndTime()
+    {
+        return End().EndTime();
+    }
+
+    public int StartIndex()
+    {
+        return Start().Index;
+    }
+
+    public int EndIndex()
+    {
+        return End().Index;
+    }
+
+    public void Add(int index, Rectangle rect)
+    {
+        Frames.Add(new DialogFrameResult(index + FrameIndexOffset, Fps, rect.Location));
+    }
+
+    public void Add(int index, Point point)
+    {
+        Frames.Add(new DialogFrameResult(index + FrameIndexOffset, Fps, point));
     }
 }
