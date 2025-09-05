@@ -55,9 +55,10 @@ public partial class DialogFrameSet : FrameSet
 
     public bool Finished { get; set; }
 
-    public bool NeedSetSeparator => Data.BodyTranslated != string.Empty &&
-                                    Data.BodyOriginal.LineCount() == 3 &&
-                                    Data.BodyTranslated.TrimAll().Length > 37;
+    // public bool NeedSetSeparator => Data.BodyTranslated != string.Empty &&
+    //                                 Data.BodyOriginal.LineCount() == 3 &&
+    //                                 Data.BodyTranslated.TrimAll().Length > 37;
+    public bool NeedSetSeparator => false;
 
     public bool UseSeparator { get; set; }
 

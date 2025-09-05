@@ -255,7 +255,8 @@ public partial class SubtitlePage : UserControl, INavigableView<SubtitlePageMode
         var fileName = dialog.ViewModel.FileName;
 
         var subtitle = GenerateSubtitle();
-        await File.WriteAllTextAsync(fileName, subtitle.ToString(), Encoding.UTF8, token);
+        // await File.WriteAllTextAsync(fileName, subtitle.ToString(), Encoding.UTF8, token);
+        await File.WriteAllTextAsync(fileName, subtitle.ToSRTString(), Encoding.UTF8, token);
 
         SnackService.Show("成功", "字幕文件已保存", ControlAppearance.Success,
             new SymbolIcon(SymbolRegular.DocumentCheckmark24), new TimeSpan(0, 0, 3));

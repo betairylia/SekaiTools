@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace SekaiToolsCore.SubStationAlpha;
 
 public class Events(IEnumerable<Event> items)
@@ -23,6 +25,19 @@ public class Events(IEnumerable<Event> items)
             ["[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"];
         sb.AddRange(_subtitleEventItems.Select(subtitleEventItem => subtitleEventItem.ToString()));
         return string.Join("\n", sb).Trim();
+    }
+
+    public string ToSRTString(int startsFrom = 0)
+    {
+        StringBuilder sb = new StringBuilder();
+        int i = 1;
+        foreach (var e in _subtitleEventItems)
+        {
+            sb.Append($"{startsFrom + i}\n{e.ToSRTString()}\n\n");
+            i++;
+        }
+
+        return sb.ToString();
     }
 
     public void Add(Event item)

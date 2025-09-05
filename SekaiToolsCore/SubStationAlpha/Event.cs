@@ -105,4 +105,9 @@ public class Event : ICloneable
     {
         return $"{Type}: {Layer},{Start},{End},{Style},{Name},{MarginL},{MarginR},{MarginV},{Effect},{Text}";
     }
+
+    public string ToSRTString()
+    {
+        return $"{Start} --> {End}\n{Text}";
+    }
 }

@@ -13,6 +13,11 @@ public class Subtitle(
         return $"{scriptInfo}\n\n{garbage}\n\n{styles}\n\n{events}\n";
     }
 
+    public string ToSRTString()
+    {
+        return $"{events.ToSRTString()}";
+    }
+
     public void Save(string path)
     {
         File.OpenWrite(path).Write(Encoding.UTF8.GetBytes(ToString()));

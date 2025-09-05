@@ -59,12 +59,14 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
         if (!ExportStyleConfig.ExportMarkerMask) events.RemoveAll(e => e.Style == "MarkerMask");
         if (!ExportStyleConfig.ExportMarkerText) events.RemoveAll(e => e.Style == "MarkerText");
         if (!ExportStyleConfig.ExportScreenComment) events.RemoveAll(e => e.Style == "Screen");
-
+        
+        var sortedEvents = events.OrderBy(e => e.Start);
+        
         return new Subtitle(
             new ScriptInfo(videoInfo.Resolution.Width, videoInfo.Resolution.Height),
             new Garbage(Path.GetFileName(videoInfo.Path), Path.GetFileName(videoInfo.Path)),
             new Styles(_styles.ToArray()),
-            new Events(events.ToArray())
+            new Events(sortedEvents.ToArray())
         );
     }
 
@@ -93,8 +95,8 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
         var queue = FormatDialogBodyArr(body);
        
         // TODO: FIXME: For CC use, disabling Typewriter now
-        return string.Join("", queue)
-            .Replace("\n", "\\N");
+        return string.Join("", queue);
+            // .Replace("\n", "\\N");
         
         var fadeTime = TypewriterSetting.FadeTime;
         var charTime = TypewriterSetting.CharTime;
@@ -295,6 +297,10 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
 
             var body = MakeDialogTypewriter(content);
 
+            // TODO: FIXME: CC Usage - Append character name before body?
+            // Looks bad so maybe not now
+            // body = $"（{characterName}）\\N{body}";
+            
             var dialogItem = SubtitleEvent.Dialog(body, startTime, endTime, styleName);
 
             var characterItemPosition =
