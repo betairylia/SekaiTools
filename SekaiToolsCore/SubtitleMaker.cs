@@ -91,6 +91,11 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
     private string MakeDialogTypewriter(string body)
     {
         var queue = FormatDialogBodyArr(body);
+       
+        // TODO: FIXME: For CC use, disabling Typewriter now
+        return string.Join("", queue)
+            .Replace("\n", "\\N");
+        
         var fadeTime = TypewriterSetting.FadeTime;
         var charTime = TypewriterSetting.CharTime;
         if (fadeTime <= 0 && charTime <= 0)
@@ -269,10 +274,12 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
 
         IEnumerable<SubtitleEvent> GenerateDialogEvent(DialogFrameSet set)
         {
+            // TODO: FIXME: For CC use, disabling jitter for now
             var subtitleEventItems = new List<SubtitleEvent>();
-            subtitleEventItems.AddRange(set.IsJitter
-                ? GenerateJitterDialogEvents(set)
-                : GenerateNoneJitterDialogEvents(set));
+            // subtitleEventItems.AddRange(set.IsJitter
+            //     ? GenerateJitterDialogEvents(set)
+            //     : GenerateNoneJitterDialogEvents(set));
+            subtitleEventItems.AddRange(GenerateNoneJitterDialogEvents(set));
             return subtitleEventItems;
         }
 
@@ -384,14 +391,16 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             center.Y += (int)(offset * 2.5);
             center.Y = center.Y / 20 * 20;
             var content = set.Data.FinalContent;
-            var startTime = set.StartTime();
+            var startTime = set.StartTime(-4);
             var endTime = set.EndTime();
 
             var maskFade = Tags.Fade(set.Data.TotalIndex == 0 ? 300 : 100, 200);
             var maskBlur = maskFade + Tags.Blur(30) + Tags.Anchor(7) + Tags.Paint(1);
 
-            var body = maskFade + Tags.Anchor(5) + Tags.FontSize(offset) +
-                       Tags.Move(center.X - offset / 3, center.Y, center.X, center.Y, 0, 200) + content;
+            // TODO: FIXME: For CC usage, disabling fade & movement for now
+            // var body = maskFade + Tags.Anchor(5) + Tags.FontSize(offset) +
+                       // Tags.Move(center.X - offset / 3, center.Y, center.X, center.Y, 0, 200) + content;
+            var body = content;
 
             var contentItem = SubtitleEvent.Dialog(body, startTime, endTime, "BannerText");
 
@@ -423,7 +432,9 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             var maskItem2 =
                 SubtitleEvent.Dialog(maskBlur + clipRight + shift + mask, startTime, endTime, "BannerMask");
 
-            return [maskItem1, maskItem2, contentItem];
+            // TODO: FIXME: For CC usage, disabling masks for now
+            // return [maskItem1, maskItem2, contentItem];
+            return [contentItem];
         }
     }
 

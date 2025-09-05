@@ -8,9 +8,9 @@ public interface IProcessFrame
 
     public FrameRate Fps { get; }
 
-    public string ExactTime();
-    public string StartTime();
-    public string EndTime();
+    public string ExactTime(int offset = 0);
+    public string StartTime(int offset = 0);
+    public string EndTime(int offset = 0);
 }
 
 public class ProcessFrame(int index, FrameRate fps) : IProcessFrame
@@ -21,18 +21,18 @@ public class ProcessFrame(int index, FrameRate fps) : IProcessFrame
 
     public static string Zero => "00:00:00.00";
 
-    public string ExactTime()
+    public string ExactTime(int offset = 0)
     {
-        return Fps.TimeAtFrame(Index).GetAssFormatted();
+        return Fps.TimeAtFrame(Index + offset).GetAssFormatted();
     }
 
-    public string StartTime()
+    public string StartTime(int offset = 0)
     {
-        return Fps.TimeAtFrame(Index, FrameType.Start).GetAssFormatted();
+        return Fps.TimeAtFrame(Index + offset, FrameType.Start).GetAssFormatted();
     }
 
-    public string EndTime()
+    public string EndTime(int offset = 0)
     {
-        return Fps.TimeAtFrame(Index, FrameType.End).GetAssFormatted();
+        return Fps.TimeAtFrame(Index + offset, FrameType.End).GetAssFormatted();
     }
 }
