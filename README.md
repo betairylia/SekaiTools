@@ -1,3 +1,5 @@
+https://github.com/Icexbb/SekaiTools
+
 # Sekai Tools
 
 ## 主要功能
