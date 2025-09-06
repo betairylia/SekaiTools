@@ -1,4 +1,10 @@
 This branch is for outputting SRT subs.  
+
+TODOs
+- 『』
+- Threeline'd lines failed to output \N properly
+- Ignore meaningless lines such as "『……ーーー♪』"
+
 [Original repo](https://github.com/Icexbb/SekaiTools) README：
 
 # Sekai Tools
