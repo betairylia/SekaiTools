@@ -1,3 +1,7 @@
+This branch is for outputting SRT subs.  
+
+[Original repo](https://github.com/Icexbb/SekaiTools) README：
+
 # Sekai Tools
 
 ## 主要功能
