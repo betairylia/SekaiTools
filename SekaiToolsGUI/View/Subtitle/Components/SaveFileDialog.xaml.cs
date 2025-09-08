@@ -44,11 +44,11 @@ public partial class SaveFileDialog : ContentDialog
     {
         var openFileDialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "Advanced SubStation Alpha 字幕文件|*.ass;",
+            Filter = "SRT 字幕文件|*.srt;",
             DefaultDirectory = Path.GetDirectoryName(VideoFile),
-            DefaultExt = ".ass",
+            DefaultExt = ".srt",
             FileName = "[STGenerated] " + Path.ChangeExtension(
-                Path.GetFileName(VideoFile), ".ass")
+                Path.GetFileName(VideoFile), ".srt")
         };
         var result = openFileDialog.ShowDialog();
         return result == true ? openFileDialog.FileName : null;

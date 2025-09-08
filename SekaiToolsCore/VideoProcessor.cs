@@ -1,6 +1,9 @@
+// #define DIAGNOSTICS
+
 using System.Diagnostics;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
+using Microsoft.Extensions.Logging;
 using SekaiToolsCore.Process.FrameSet;
 using SekaiToolsCore.Process.Model;
 using SekaiToolsCore.Story.Event;
@@ -138,10 +141,19 @@ public class VideoProcessor
             var tic = Environment.TickCount;
             try
             {
+#if DIAGNOSTICS
+                var flwatch = System.Diagnostics.Stopwatch.StartNew();
+#endif
                 if (Token.IsCancellationRequested) break;
                 if (Capture is not { IsOpened: true }) break;
                 if (!Capture.Read(frame)) break;
-
+#if DIAGNOSTICS
+                flwatch.Stop();
+#endif
+#if DIAGNOSTICS
+                var fiwatch = System.Diagnostics.Stopwatch.StartNew();
+#endif
+                
                 frameIndex = (int)Capture.Get(CapProp.PosFrames);
                 Callbacks.OnProgress(frameIndex / frameCount);
 
@@ -150,14 +162,34 @@ public class VideoProcessor
                     var previewFrame = frame.Clone();
                     Task.Run(() => { Callbacks.OnFramePreviewImage(previewFrame); }, Token);
                 }
+#if DIAGNOSTICS
+                fiwatch.Stop();
+#endif
+#if DIAGNOSTICS
+                var fprocwatch = System.Diagnostics.Stopwatch.StartNew();
+#endif
 
-                FrameProcess.Process(frame);
+                // FrameProcess.Process(frame);
+#if DIAGNOSTICS
+                fprocwatch.Stop();
+#endif
+                
+#if DIAGNOSTICS
+                var contentwatch = System.Diagnostics.Stopwatch.StartNew();
+#endif
 
                 if (ContentMatcher is { Finished: false })
                 {
                     ContentMatcher.Process(frame);
                     continue;
                 }
+                
+#if DIAGNOSTICS
+                contentwatch.Stop();
+#endif
+#if DIAGNOSTICS
+                var dialog = System.Diagnostics.Stopwatch.StartNew();
+#endif
 
                 var matchBannerNow = true;
                 if (DialogMatcher is { Finished: false })
@@ -174,6 +206,9 @@ public class VideoProcessor
                 {
                     break;
                 }
+#if DIAGNOSTICS
+                var dialogwatch = System.Diagnostics.Stopwatch.StartNew();
+#endif
 
                 if (BannerMatcher is { Finished: false } && matchBannerNow)
                 {
@@ -188,6 +223,13 @@ public class VideoProcessor
                     MarkerMatcher.Process(frame, frameIndex);
                     if (MarkerMatcher.Set[markerIndex].Finished) Callbacks.OnNewMarker(MarkerMatcher.Set[markerIndex]);
                 }
+#if DIAGNOSTICS
+                Log.Logger.LogInformation($"Frame Load {flwatch.ElapsedMilliseconds} ms");
+                Log.Logger.LogInformation($"Frame Info {fiwatch.ElapsedMilliseconds} ms");
+                Log.Logger.LogInformation($"Frame preproc {fprocwatch.ElapsedMilliseconds} ms");
+                Log.Logger.LogInformation($"Content menu {contentwatch.ElapsedMilliseconds} ms");
+                Log.Logger.LogInformation($"Dialog {dialogwatch.ElapsedMilliseconds} ms");
+#endif
             }
             catch (Exception e)
             {

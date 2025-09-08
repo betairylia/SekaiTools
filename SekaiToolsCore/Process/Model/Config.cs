@@ -27,7 +27,7 @@ public struct ExportStyleConfig
     public bool ExportMarkerMask { get; init; } = true;
     public bool ExportMarkerText { get; init; } = true;
     public bool ExportScreenComment { get; init; } = true;
-
+    
     public ExportStyleConfig()
     {
     }

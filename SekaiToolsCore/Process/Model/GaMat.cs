@@ -9,6 +9,12 @@ public class GaMat // Gray and Alpha Mat
     public readonly Mat Alpha;
     public readonly Mat Gray;
 
+    public GaMat()
+    {
+        Alpha = new Mat();
+        Gray = new Mat();
+    }
+    
     public GaMat(IInputArray src, bool resize = true)
     {
         var grayImage = new Mat();
@@ -25,6 +31,14 @@ public class GaMat // Gray and Alpha Mat
 
         Gray = grayImage;
         Alpha = alphaChannel;
+    }
+
+    public void ResizeTo(GaMat dst, float scaling)
+    {
+        CvInvoke.Resize(Alpha, dst.Alpha, new Size(
+            (int)(Alpha.Width * scaling), (int)(Alpha.Height * scaling)), scaling, scaling);
+        CvInvoke.Resize(Gray, dst.Gray, new Size(
+            (int)(Alpha.Width * scaling), (int)(Alpha.Height * scaling)), scaling, scaling);
     }
 
     public Size Size => Gray.Size;

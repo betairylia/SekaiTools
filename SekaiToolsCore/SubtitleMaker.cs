@@ -60,6 +60,9 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
         if (!ExportStyleConfig.ExportMarkerText) events.RemoveAll(e => e.Style == "MarkerText");
         if (!ExportStyleConfig.ExportScreenComment) events.RemoveAll(e => e.Style == "Screen");
         
+        // TODO: FIXME: Make this in settings page
+        events.RemoveAll(e => IsDialogueNonTranslated(e.Text));
+        
         var sortedEvents = events.OrderBy(e => e.Start);
         
         return new Subtitle(
@@ -71,6 +74,13 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
     }
 
     #region Dialog
+
+    static HashSet<char> noTranslationChars = new HashSet<char>(
+        "—-ー―～♪.…・「」『』っ！？1234567890");
+    private bool IsDialogueNonTranslated(string dialogue)
+    {
+        return dialogue.All(c => noTranslationChars.Contains(c));
+    }
 
     private GaMat GetNameTag(string name)
     {
@@ -84,7 +94,7 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             .Replace("... ...", "......")
             .Replace("\\N", "\n").Replace("\\n", "\n");
         var lineCount = bodyCopy.Count(t => t == '\n');
-        if (lineCount == 2) bodyCopy = bodyCopy.Replace("\n", "");
+        // if (lineCount == 2) bodyCopy = bodyCopy.Replace("\n", "");
         var queue = new Queue<char>();
         foreach (var c in bodyCopy) queue.Enqueue(c);
         return queue;

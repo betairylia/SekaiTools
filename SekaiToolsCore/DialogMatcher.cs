@@ -178,7 +178,7 @@ public class DialogMatcher(
 
             if (frameIndex != -1)
             {
-                Log.Logger.LogDebug(
+                Log.Logger.LogInformation(
                     "{TypeName} Frame {FrameIndex} Match Dialog Content {DialogIndex} Result: {MaxVal}",
                     nameof(DialogMatcher), frameIndex, LastNotProcessedIndex(), result.MaxVal);
             }

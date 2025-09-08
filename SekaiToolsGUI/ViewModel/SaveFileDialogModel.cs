@@ -10,7 +10,7 @@ public class SaveFileDialogModel : ViewModelBase
 
     public double StaffLineTime
     {
-        get => GetProperty(5.0);
+        get => GetProperty(0.0);
         set => SetProperty(value);
     }
 
