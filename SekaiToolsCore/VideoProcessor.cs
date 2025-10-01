@@ -50,6 +50,9 @@ public class VideoProcessor
 
     private bool _debugIgnoreBannerMarker;
 
+    private int _skipFrames = 2;
+    public int SkipFrames => _skipFrames;
+
 
     public bool Finished => ContentMatcher is { Finished: true } &&
                             DialogMatcher is { Finished: true } &&
@@ -146,7 +149,11 @@ public class VideoProcessor
 #endif
                 if (Token.IsCancellationRequested) break;
                 if (Capture is not { IsOpened: true }) break;
-                if (!Capture.Read(frame)) break;
+                
+                // Skip some frames as we cannot access 60fps anyways
+                for(int fi = 0; fi < _skipFrames; fi++)
+                    Capture.Grab();
+                if (!Capture.Retrieve(frame)) break;
 #if DIAGNOSTICS
                 flwatch.Stop();
 #endif
@@ -291,7 +298,7 @@ public class VideoProcessor
             var fps = (int)(1d / avgDuration * 1000);
             var etaMs = (frameCount - frameIndex) * avgDuration;
             var eta = new TimeSpan(0, 0, 0, 0, (int)etaMs);
-            Callbacks.OnFps(fps, eta);
+            Callbacks.OnFps(fps * _skipFrames, eta);
         }
     }
 }

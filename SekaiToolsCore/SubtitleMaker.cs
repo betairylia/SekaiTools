@@ -76,7 +76,7 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
     #region Dialog
 
     static HashSet<char> noTranslationChars = new HashSet<char>(
-        "—-ー―～♪.…・「」『』っ！？1234567890");
+        "—-ー―～♪.…・「」『』っ！？1234567890 \u3000");
     private bool IsDialogueNonTranslated(string dialogue)
     {
         return dialogue.All(c => noTranslationChars.Contains(c));
@@ -93,7 +93,7 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             .Replace("…", "...")
             .Replace("... ...", "......")
             .Replace("\\N", "\n").Replace("\\n", "\n");
-        var lineCount = bodyCopy.Count(t => t == '\n');
+        // var lineCount = bodyCopy.Count(t => t == '\n');
         // if (lineCount == 2) bodyCopy = bodyCopy.Replace("\n", "");
         var queue = new Queue<char>();
         foreach (var c in bodyCopy) queue.Enqueue(c);
@@ -102,34 +102,38 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
 
     private string MakeDialogTypewriter(string body)
     {
-        var queue = FormatDialogBodyArr(body);
+        // var queue = FormatDialogBodyArr(body);
        
         // TODO: FIXME: For CC use, disabling Typewriter now
-        return string.Join("", queue);
+        // return string.Join("", queue);
             // .Replace("\n", "\\N");
+        return body
+           .Replace("…", "...")
+           .Replace("... ...", "......")
+           .Replace("\\N", "\n").Replace("\\n", "\n");
         
-        var fadeTime = TypewriterSetting.FadeTime;
-        var charTime = TypewriterSetting.CharTime;
-        if (fadeTime <= 0 && charTime <= 0)
-            return string.Join("", queue);
-
-        var sb = new StringBuilder();
-        sb.Append(queue.Dequeue());
-
-        var nextStart = 0;
-        foreach (var s in queue)
-        {
-            var ft = fadeTime / (char.IsAscii(s) ? 2 : 1);
-            var ct = charTime / (char.IsAscii(s) ? 2 : 1);
-
-            var start = nextStart + (s == '\n' ? 300 : 0);
-            var alphaTag = $@"{{\alphaFF\t({start},{start + ft},1,\alpha0)}}";
-            sb.Append(alphaTag);
-            sb.Append(s == '\n' ? "\\N" : s);
-            nextStart = start + ct;
-        }
-
-        return sb.ToString();
+        // var fadeTime = TypewriterSetting.FadeTime;
+        // var charTime = TypewriterSetting.CharTime;
+        // if (fadeTime <= 0 && charTime <= 0)
+        //     return string.Join("", queue);
+        //
+        // var sb = new StringBuilder();
+        // sb.Append(queue.Dequeue());
+        //
+        // var nextStart = 0;
+        // foreach (var s in queue)
+        // {
+        //     var ft = fadeTime / (char.IsAscii(s) ? 2 : 1);
+        //     var ct = charTime / (char.IsAscii(s) ? 2 : 1);
+        //
+        //     var start = nextStart + (s == '\n' ? 300 : 0);
+        //     var alphaTag = $@"{{\alphaFF\t({start},{start + ft},1,\alpha0)}}";
+        //     sb.Append(alphaTag);
+        //     sb.Append(s == '\n' ? "\\N" : s);
+        //     nextStart = start + ct;
+        // }
+        //
+        // return sb.ToString();
     }
 
     private string MakeDialogTypewriter(string body, int frameCount)
@@ -244,8 +248,9 @@ public class SubtitleMaker(VideoInfo videoInfo, TemplateManager templateManager,
             }
             else
             {
-                if (set.Data.BodyTranslated.LineCount() == 3)
-                    set.Data.SetTranslationContent(set.Data.BodyTranslated.TrimAll());
+                // TODO: FIXME: CC usage
+                // if (set.Data.BodyTranslated.LineCount() == 3)
+                //     set.Data.SetTranslationContent(set.Data.BodyTranslated.TrimAll());
                 dialogEvents.AddRange(GenerateDialogEvent(set));
             }
 

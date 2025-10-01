@@ -17,8 +17,9 @@ public class QuickEditDialogModel : ViewModelBase
         else
             ContentTranslated = ContentTranslated.Replace("\\N", "\n");
 
-        if (ContentTranslated.LineCount() == 3)
-            ContentTranslated = ContentTranslated.Replace("\n", "");
+        // TODO: FIXME: CC usage
+        // if (ContentTranslated.LineCount() == 3)
+        //     ContentTranslated = ContentTranslated.Replace("\n", "");
 
         CanReturn = dialog.Data.BodyOriginal.LineCount() == 3;
         UseReturn = CanReturn && dialog.UseSeparator;
